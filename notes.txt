@@ -1,0 +1,63 @@
+nohup python your_script.py > output.log 2>&1 &
+ps -u $USER | grep python  u 
+
+
+In AMR / AMP papers, reviewers expect:
+Log-transformed MIC
+Correlation metrics
+RMSE reported after inverse transform
+Clear unit reporting
+
+
+Log MIC fixes skewness; z-score fixes scale bias.
+Together, they let the model learn biology, not measurement artifacts.
+
+
+Very important rules (common mistakes)
+❌ Do NOT compute μ, σ on test data
+Always:
+Compute μ, σ on training set
+Reuse them for validation & test
+
+❌ Do NOT report z-scores
+
+Reviewers expect MIC or log MIC, not normalized targets
+
+
+
+--------------------------
+Evaluating on test set...
+***********
+ Model 0 Metrics : **** 
+ {'RMSE': 0.12810414, 'R2': 0.3937997817993164, 'Pearson': 0.6751268, 'Kendall': 0.48739921164456584, 'RMSE_MIC': 0.115062654, 'R2_MIC': 0.4585607647895813, 'Pearson_MIC': 0.67791766, 'Kendall_MIC': 0.48740404105305096}
+***********
+ Model 1 Metrics : **** 
+ {'RMSE': 0.14462541, 'R2': 0.24491268396377563, 'Pearson': 0.6199568, 'Kendall': 0.43632996436513705, 'RMSE_MIC': 0.12499173, 'R2_MIC': 0.3896883726119995, 'Pearson_MIC': 0.62542653, 'Kendall_MIC': 0.43632996436513705}
+***********
+ Model 2 Metrics : **** 
+ {'RMSE': 0.1362492, 'R2': 0.3378942012786865, 'Pearson': 0.62694705, 'Kendall': 0.4169514685315956, 'RMSE_MIC': 0.12507375, 'R2_MIC': 0.3994811773300171, 'Pearson_MIC': 0.6331561, 'Kendall_MIC': 0.4169514685315956}
+***********
+ Model 3 Metrics : **** 
+ {'RMSE': 0.133366, 'R2': 0.4178221821784973, 'Pearson': 0.69731665, 'Kendall': 0.49782853326948573, 'RMSE_MIC': 0.12117116, 'R2_MIC': 0.4933508038520813, 'Pearson_MIC': 0.70326173, 'Kendall_MIC': 0.4978256185480264}
+***********
+ Model 4 Metrics : **** 
+ {'RMSE': 0.13495903, 'R2': 0.3480457067489624, 'Pearson': 0.67012763, 'Kendall': 0.46829200018935885, 'RMSE_MIC': 0.1183118, 'R2_MIC': 0.462598979473114, 'Pearson_MIC': 0.6810181, 'Kendall_MIC': 0.46829200018935885}
+
+
+ 
+Evaluating on test set...
+***********
+ Model 0 Metrics : **** 
+ {'RMSE': 0.1385313, 'R2': 0.2910991311073303, 'Pearson': 0.6119636, 'Kendall': 0.43105504220966456, 'RMSE_MIC': 0.12355443, 'R2_MIC': 0.37569379806518555, 'Pearson_MIC': 0.6140151, 'Kendall_MIC': 0.43105504220966456}
+***********
+ Model 1 Metrics : **** 
+ {'RMSE': 0.14457855, 'R2': 0.24540185928344727, 'Pearson': 0.6199497, 'Kendall': 0.4380323590025617, 'RMSE_MIC': 0.124828935, 'R2_MIC': 0.3912770748138428, 'Pearson_MIC': 0.6266093, 'Kendall_MIC': 0.4380323590025617}
+***********
+ Model 2 Metrics : **** 
+ {'RMSE': 0.1362283, 'R2': 0.33809733390808105, 'Pearson': 0.6270522, 'Kendall': 0.41702915363156046, 'RMSE_MIC': 0.12506069, 'R2_MIC': 0.3996064066886902, 'Pearson_MIC': 0.6332541, 'Kendall_MIC': 0.41702915363156046}
+***********
+ Model 3 Metrics : **** 
+ {'RMSE': 0.13585298, 'R2': 0.3959071636199951, 'Pearson': 0.68004405, 'Kendall': 0.4831318000810687, 'RMSE_MIC': 0.12412887, 'R2_MIC': 0.468315064907074, 'Pearson_MIC': 0.68535864, 'Kendall_MIC': 0.4831288567471766}
+***********
+ Model 4 Metrics : **** 
+ {'RMSE': 0.13306661, 'R2': 0.36620116233825684, 'Pearson': 0.6491271, 'Kendall': 0.4405518933163969, 'RMSE_MIC': 0.12091608, 'R2_MIC': 0.4386799931526184, 'Pearson_MIC': 0.6632134, 'Kendall_MIC': 0.4405518933163969}

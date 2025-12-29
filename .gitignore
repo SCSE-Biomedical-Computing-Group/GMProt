@@ -1,0 +1,59 @@
+# Ignore all data files
+data/
+
+# =========================
+# Python cache / bytecode
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# Logs & checkpoints
+# =========================
+*.log
+*.out
+*.err
+*.ckpt
+checkpoints/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# OS / Editor junk
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# =========================
+# Model / experiment outputs (ML)
+# =========================
+model/
+results/
+runs/
+wandb/
+tensorboard/
+logs/
+
+# =========================
+# Misc
+# =========================
+*.pkl
+*.npz
+*.h5
+*.pt
+*.pth
