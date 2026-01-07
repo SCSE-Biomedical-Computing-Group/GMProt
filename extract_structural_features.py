@@ -479,8 +479,9 @@ def generate_contact_map_csv(npz_folder_path, input_csv_path, save_csv_path):
     # --------------------------
     mic_df = pd.read_csv(input_csv_path)
 
-    if "sequence" not in mic_df.columns or "normalized_value" not in mic_df.columns:
-        raise ValueError("CSV must contain 'sequence' and 'normalized_value' columns.")
+    #taking raw mic 'value' instead of 'normalized_value' column
+    if "sequence" not in mic_df.columns or "value" not in mic_df.columns:
+        raise ValueError("CSV must contain 'sequence' and 'value' columns.")
 
     # Normalize sequence field
     mic_df["sequence_clean"] = mic_df["sequence"].str.strip().str.upper()
@@ -512,7 +513,7 @@ def generate_contact_map_csv(npz_folder_path, input_csv_path, save_csv_path):
         if match.empty:
             raise ValueError(f"Sequence not found in MIC CSV: {sequence}")
 
-        label = match["normalized_value"].iloc[0]  # cleaner than .values[0]
+        label = match["value"].iloc[0]  # cleaner than .values[0]
 
         # --------------------------
         # Convert contact map → JSON string
@@ -654,19 +655,19 @@ if __name__ == "__main__":
     # extract_pdb_features(input_folder, out_dir) #1. 
     # explain_npy_feature('pdb_fem_model_3_seed_000_features.npz')
 
-    '''generate_contact_map_csv(
+    generate_contact_map_csv(
         npz_folder_path='/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/pdb_features',
-        input_csv_path='/data/prem001/PGAT-ABPp/code/data/ecoli_normalized.csv',
+        input_csv_path='/data/prem001/PGAT-ABPp/code/data/ecoli_mic_normalized.csv',
         save_csv_path='/data/prem001/PGAT-ABPp/code/data/contact_map.csv'
-    )'''
+    )
 
-    generate_distance_weighted_csv(
+    '''generate_distance_weighted_csv(
     npz_folder_path='/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/pdb_features',
     input_csv_path='/data/prem001/PGAT-ABPp/code/data/ecoli_normalized.csv',
     save_csv_path='/data/prem001/PGAT-ABPp/code/data/distance_weighted_contact_map.csv',
     threshold=10.0,
     weight_type='inverse'  # options: 'inverse', 'inverse_sq', 'exp', 'linear'
-)
+    )'''
 
 
 

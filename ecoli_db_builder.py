@@ -161,6 +161,7 @@ def normalize_log_mic(df, value_col="value", save_stats_path=None, stats=None):
     # Step 3: Z-score normalization
     df["normalized_value"] = (df["log_mic"] - mean_val) / std_val
 
+    #added new comment
     # Step 4: Optionally save mean and std for inference
     if save_stats_path is not None and stats is not None:
         with open(save_stats_path, "wb") as f:
@@ -190,7 +191,6 @@ def save_preprocessed_ecoli(data_root=None, grampa_file=None):
     df, negatives_count = remove_negative_mic(df)
     df, duplicate_count = count_and_remove_duplicates(df)
 
-    # df = normalize_mic(df)
     df, train_stats = normalize_log_mic(df, value_col="value", save_stats_path="mic_stats.pkl")
 
 

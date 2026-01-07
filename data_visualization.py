@@ -3,7 +3,9 @@ Utility for Data Visualization for Grampa DB.
 """
 from pathlib import Path
 
+import numpy as np 
 import matplotlib.pyplot as plt
+from scipy.stats import spearmanr
 import pandas as pd
 
 
@@ -174,14 +176,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr
 
-def plot_correlation(y_true, y_pred, title="Predicted vs Actual (Z-score)"):
+def plot_correlation(y_true, y_pred, save_path=None, title="Predicted vs Actual"):
     plt.figure(figsize=(12, 5))
     
     # --- Plot 1: Scatter Plot ---
     plt.subplot(1, 2, 1)
     sns.regplot(x=y_true, y=y_pred, scatter_kws={'alpha':0.4, 's':10}, line_kws={'color':'red'})
-    plt.xlabel("Actual (Z-score)")
-    plt.ylabel("Predicted (Z-score)")
+    plt.xlabel("Actual ")
+    plt.ylabel("Predicted")
     plt.title(f"{title}\nPearson: {pearsonr(y_true, y_pred)[0]:.4f}")
     
     # --- Plot 2: Residual Plot ---
@@ -192,7 +194,12 @@ def plot_correlation(y_true, y_pred, title="Predicted vs Actual (Z-score)"):
     plt.title("Error Distribution")
     
     plt.tight_layout()
-    plt.savefig("visualization/pearson/correlation_analysis.png")
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    else:
+        plt.savefig("visualization/pearson/correlation_analysis.png")
+        print("Plot saved successfully to Path: visualization/pearson/correlation_analysis.png")
+
     plt.show()
 
 def plot_train_val(history, save_path, model_index):
@@ -221,6 +228,89 @@ def plot_train_val(history, save_path, model_index):
     plt.grid(True)
     plt.savefig(loss_path, dpi=300, bbox_inches="tight")
     plt.close()
+
+def plot_train_val_with_pearson(history, save_path):
+    history_dict = history.history
+    epochs = range(1, len(history_dict["loss"]) + 1)
+
+    plt.figure(figsize=(10, 5))
+    
+    # Plot Loss
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, history_dict["loss"], label="train_loss")
+    plt.plot(epochs, history_dict["val_loss"], label="val_loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title("Training & Validation Loss")
+    plt.legend()
+
+    # Plot Val Pearson
+    plt.subplot(1, 2, 2)
+    if "val_Pearson" in history_dict:
+        plt.plot(epochs, history_dict["val_Pearson"], label="val_Pearson", color="green")
+    plt.xlabel("Epochs")
+    plt.ylabel("Pearson r")
+    plt.title("Validation Pearson")
+    plt.ylim(0, 1)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.show()    
+
+def plot_uncertainty_vs_error(y_true, q25, q50, q75, save_path=None):
+    uncertainty = q75 - q25
+    abs_error = np.abs(y_true - q50)
+
+    rho, p = spearmanr(uncertainty, abs_error)
+
+    plt.figure(figsize=(6, 5))
+    plt.scatter(uncertainty, abs_error, alpha=0.6)
+    plt.xlabel("Predictive Uncertainty (Q75 − Q25)")
+    plt.ylabel("Absolute Error |y − Q50|")
+    plt.title(f"Uncertainty vs Error (Spearman ρ = {rho:.2f})")
+    plt.grid(True)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.show()
+
+def plot_mean_attention(attn_weights, save_path):
+    labels = ["Sequence", "GNN", "Physicochemical"]
+    mean_attn = attn_weights.mean(axis=0)
+
+    plt.figure(figsize=(5, 4))
+    sns.barplot(x=labels, y=mean_attn)
+    plt.ylabel("Mean Attention Weight")
+    plt.title("Average Branch Attention")
+    plt.ylim(0, 1)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    
+    print(f'Plot saved sucessfully to Path: {save_path}')
+
+    plt.show()
+
+def plot_attention_distribution(attn_weights, save_path):
+    labels = ["Sequence", "GNN", "Physicochemical"]
+
+    plt.figure(figsize=(6, 4))
+    for i in range(3):
+        sns.kdeplot(attn_weights[:, i], label=labels[i], fill=True)
+
+    plt.xlabel("Attention Weight")
+    plt.ylabel("Density")
+    plt.title("Distribution of Attention Weights Across Samples")
+    plt.legend()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    
+    print(f'Plot saved sucessfully to Path: {save_path}')
+
+    plt.show()
+
 
 def format_metrics_table(metrics_list, float_fmt="{:.4f}"):
     """

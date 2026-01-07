@@ -33,13 +33,53 @@ def extract_amp_features(sequences):
     
     return scaled_array, df.columns.tolist()
 
-def compute_save_physio_features():
+def extract_amp_features_full(sequences):
+    """
+    Extracts AMP physicochemical features compatible with current modlamp version.
+    
+    Features:
+    1. Global descriptors: MW, Charge, pI, Aliphatic Index, Aromaticity, Instability, Boman, Hydrophobic Ratio, Length
+    2. Amino acid composition: 20 AA frequencies
+    3. Eisenberg scale descriptors: hydrophobic moment and global average
+    """
+
+    df_list = []
+
+    # ─── 1. Global descriptors ────────────────────────────────
+    glob = GlobalDescriptor(sequences)
+    glob.calculate_all()  # MW, Charge, pI, etc.
+    df_list.append(pd.DataFrame(glob.descriptor, columns=glob.featurenames))
+
+    # ─── 2. Amino acid composition (20 residues) ─────────────
+    pep_base = PeptideDescriptor(sequences)  # no scale argument
+    pep_base.count_aa()  # counts AA frequencies
+    df_list.append(pd.DataFrame(pep_base.descriptor, columns=pep_base.featurenames))
+
+    # ─── 3. Eisenberg scale descriptors ──────────────────────
+    pep_eis = PeptideDescriptor(sequences, "eisenberg")
+    pep_eis.calculate_moment()  # hydrophobic moment
+    df_list.append(pd.DataFrame(pep_eis.descriptor, columns=["Eisenberg_Moment"]))
+
+    pep_eis.calculate_global()  # global average
+    df_list.append(pd.DataFrame(pep_eis.descriptor, columns=["Eisenberg_Global"]))
+
+    # ─── 4. Combine all features and normalize ───────────────
+    df_final = pd.concat(df_list, axis=1).fillna(0)
+    scaled_features = StandardScaler().fit_transform(df_final)
+
+    return scaled_features, df_final.columns.tolist()
+
+
+def compute_save_physio_features(save_path = 'data/phyiochem_full.csv'):
     '''
         Computes Physiochemical Features from ecoli_normalized  Sequence CSV file and Saves it.
     '''
-    df = pd.read_csv('/data/prem001/PGAT-ABPp/code/data/ecoli_normalized.csv') #
+    df = pd.read_csv('/data/prem001/PGAT-ABPp/code/data/ecoli_mic_normalized.csv') #
     sequences = df['sequence'].to_list()
-    features_scaled, feature_names = extract_amp_features(sequences)
+
+    # features_scaled, feature_names = extract_amp_features(sequences) #Top 12 features only
+    features_scaled, feature_names = extract_amp_features_full(sequences)
+    print(f"Feature Names: {feature_names} And Lenght: {len(feature_names)} ")
 
     # Success Check: Convert back to DataFrame for verification
     physio_df = pd.DataFrame(features_scaled, columns=feature_names)
@@ -47,10 +87,42 @@ def compute_save_physio_features():
     print(f"Extracted {len(feature_names)} features successfully.")
     print(physio_df.head())
 
-    save_path = 'data/phyiochem.csv'
+    
     physio_df.to_csv(save_path)
 
     print(f"PhysioChem Features saved successfully to: {save_path}.")
+
+def load_physio_features_as_numpy_all():
+    """
+    Returns a dictionary mapping each sequence to a NumPy array of all its physico-chemical features.
+
+    Args:
+        PHYSIO_CHEM_FILE (str): Path to the CSV file containing all physico-chemical features.
+
+    Returns:
+        dict: {sequence_str: np.array([all feature values], dtype=np.float32)}
+    """
+
+    # Load CSV
+    df = pd.read_csv(PHYSIO_CHEM_FILE)
+
+    # Remove 'Unnamed: 0' if present and set 'sequence' as index
+    df = df.set_index('sequence').drop(columns=['Unnamed: 0'], errors='ignore')
+
+    features_dict = {}
+
+    # Iterate over sequences
+    for seq, row in df.iterrows():
+        feature_row = row.values.astype(np.float32)
+
+        # Check for NaN or infinite values
+        if not np.isfinite(feature_row).all():
+            raise ValueError(f"Sequence {seq} contains NaN or Inf values.")
+
+        features_dict[seq] = feature_row
+
+    print(f"Loaded physico-chemical features for {len(features_dict)} sequences.")
+    return features_dict
 
 def load_physio_features_as_numpy():
     '''
@@ -151,44 +223,82 @@ def integrate_physio_with_mic(
         print(f" Integrated file saved to: {output_csv}")
 
     return merged_df
+
+import pandas as pd
+
 def compute_physio_mic_correlation(
-    csv_path="/data/prem001/PGAT-ABPp/code/data/physio_with_mic.csv",
-    target_col="normalized_value"
+    physio_csv,
+    mic_csv,
+    sequence_col="sequence",
+    target_col="log_mic",
+    save_path="data/physio_mic_correlation.csv"
 ):
     """
     Compute absolute Pearson correlation between physico-chemical features and MIC.
 
+    Parameters
+    ----------
+    physio_csv : str
+        CSV file containing sequence + physico-chemical features
+    mic_csv : str
+        CSV file containing sequence + MIC (log or normalized)
+    sequence_col : str
+        Column name for peptide sequence
+    target_col : str
+        Column name for MIC values
+
     Returns
     -------
-    dict
-        Sorted dictionary {feature_name: |correlation|}
+    pd.DataFrame
+        Sorted table with columns:
+        [feature, pearson_corr, abs_corr]
     """
 
-    # Load data
-    df = pd.read_csv(csv_path)
+    # ─── Load data ──────────────────────────────────────────
+    df_physio = pd.read_csv(physio_csv)
+    df_mic = pd.read_csv(mic_csv)
 
-    # Drop non-feature columns
-    exclude_cols = {"sequence", target_col, "Unnamed: 0"}
+    # ─── Merge on sequence ──────────────────────────────────
+    df = pd.merge(
+        df_physio,
+        df_mic[[sequence_col, target_col]],
+        on=sequence_col,
+        how="inner"
+    )
+
+    # ─── Select numeric physico-chemical features ───────────
+    exclude_cols = {sequence_col, target_col, "Unnamed: 0"}
     feature_cols = [
         col for col in df.columns
-        if col not in exclude_cols and pd.api.types.is_numeric_dtype(df[col])
+        if col not in exclude_cols
+        and pd.api.types.is_numeric_dtype(df[col])
     ]
 
-    # Drop rows with missing values
+    # ─── Drop missing values ────────────────────────────────
     df = df[feature_cols + [target_col]].dropna()
 
-    correlations = {}
+    # ─── Compute correlations ───────────────────────────────
+    records = []
 
     for col in feature_cols:
         corr = df[col].corr(df[target_col], method="pearson")
-        correlations[col] = abs(corr)
+        records.append({
+            "feature": col,
+            "pearson_corr": corr,
+            "abs_corr": abs(corr)
+        })
 
-    # Sort by absolute correlation (descending)
-    correlations_sorted = dict(
-        sorted(correlations.items(), key=lambda x: x[1], reverse=True)
+    # ─── Sort by absolute correlation ───────────────────────
+    corr_df = (
+        pd.DataFrame(records)
+        .sort_values("abs_corr", ascending=False)
+        .reset_index(drop=True)
     )
+    corr_df.to_csv(save_path, index=False)
+    print(f"Correlation results saved to: {save_path}")
 
-    return correlations_sorted
+    return corr_df
+
 
 def save_dict_to_txt(corr_dict, out_path="/data/prem001/PGAT-ABPp/code/data/physio_mic_correlation.txt"):
     with open(out_path, "w") as f:
@@ -199,7 +309,16 @@ def save_dict_to_txt(corr_dict, out_path="/data/prem001/PGAT-ABPp/code/data/phys
 
 
 if __name__ == "__main__":
-    compute_save_physio_features()
+    # compute_save_physio_features()
+   compute_physio_mic_correlation(
+        physio_csv=f"data/phyiochem.csv",
+        mic_csv=f"data/ecoli_mic_normalized.csv",
+        sequence_col="sequence",
+        target_col="log_mic",
+        save_path="data/physio_mic_correlation_full.csv"
+    )
+
+
     # load_physio_features_as_numpy()
     # integrate_physio_with_mic()
     # corr_dict = compute_physio_mic_correlation()

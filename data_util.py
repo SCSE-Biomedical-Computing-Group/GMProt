@@ -2,15 +2,19 @@ import pickle
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.preprocessing import KBinsDiscretizer
+from collections import Counter
 
 import seqs_prott5 as prott5
 from extract_structural_features import get_contact_map
 import physiochem_feature_extractor as PFE
+from blosum62 import load_blosum62_features
 
 EMB_DIM = 1024
-CONTACT_MAP_FILE = "/data/prem001/PGAT-ABPp/code/data/contact_map.csv"
-EMBEDDING_FILE = "/data/prem001/PGAT-ABPp/code/prott5/prot_t5_xl_uniref50/prott5_residue_level.npz"
-DATASET_PATH = "/data/prem001/PGAT-ABPp/code/data/five_fold/datasets.pkl"
+CONTACT_MAP_FILE = "data/contact_map.csv"
+EMBEDDING_FILE = "data/prott5/prot_t5_xl_uniref50/prott5_residue_level.npz"
+BLOSUM62_FILE = "data/blosum62_features.csv"
+DATASET_PATH = "data/five_fold/datasets.pkl"
 
 def stratified_train_val_test_splits(
     features,
@@ -19,89 +23,174 @@ def stratified_train_val_test_splits(
     test_size=719,
     seed=42,
     n_bins=5,
-    n_datasets=5
-):
-    """
-    Generate multiple stratified train/val/test splits
-    with fixed sizes and continuous MIC target.
+    n_datasets=5,
+    max_attempts=100
+):  
+    '''
+    Features tuple :  emb, cm, physio_feature, blosum_feature, mic
+    '''
+    assert train_size + val_size + test_size == len(features)
 
-    Returns:
-        List of tuples:
-        [(train_set, val_set, test_set), ...]
-    """
-
-    assert train_size + val_size + test_size == len(features), \
-        "Split sizes must sum to total dataset size"
-
-    mic_values = np.array([item[3] for item in features])
+    mic_values = np.array([item[4] for item in features])
     indices = np.arange(len(features))
 
-    # Quantile-based stratification bins
-    bin_edges = np.percentile(
-        mic_values,
-        np.linspace(0, 100, n_bins + 1)[1:-1]
+    kbd = KBinsDiscretizer(
+        n_bins=n_bins,
+        encode="ordinal",
+        strategy="quantile"
     )
-    mic_binned = np.digitize(mic_values, bins=bin_edges)
+
+    mic_binned = (
+        kbd.fit_transform(mic_values.reshape(-1, 1))
+        .astype(int)
+        .ravel()
+    )
 
     datasets = []
+    attempts = 0
+    split_seed = seed
 
-    # -------- Step 1: Multiple Train vs (Val + Test) splits --------
-    sss_1 = StratifiedShuffleSplit(
-        n_splits=n_datasets,
-        train_size=train_size,
-        test_size=val_size + test_size,
-        random_state=seed
-    )
+    while len(datasets) < n_datasets and attempts < max_attempts:
+        attempts += 1
 
-    for split_id, (train_idx, temp_idx) in enumerate(
-        sss_1.split(indices, mic_binned)
-    ):
-        # -------- Step 2: Validation vs Test --------
-        mic_temp_binned = mic_binned[temp_idx]
+        sss_1 = StratifiedShuffleSplit(
+            n_splits=1,
+            train_size=train_size,
+            test_size=val_size + test_size,
+            random_state=split_seed
+        )
+
+        train_idx, temp_idx = next(
+            sss_1.split(indices, mic_binned)
+        )
+
+        # ---- Validate train bins ----
+        if min(Counter(mic_binned[train_idx]).values()) < 2:
+            split_seed += 1
+            continue
+
+        # ---- Validate temp bins ----
+        temp_bins = mic_binned[temp_idx]
+        if min(Counter(temp_bins).values()) < 2:
+            split_seed += 1
+            continue
 
         sss_2 = StratifiedShuffleSplit(
             n_splits=1,
             train_size=val_size,
             test_size=test_size,
-            random_state=seed + split_id  # ensure variation
+            random_state=split_seed + 10_000
         )
 
         val_sub_idx, test_sub_idx = next(
-            sss_2.split(temp_idx, mic_temp_binned)
+            sss_2.split(temp_idx, temp_bins)
         )
 
-        val_idx = temp_idx[val_sub_idx]
-        test_idx = temp_idx[test_sub_idx]
+        datasets.append((
+            [features[i] for i in train_idx],
+            [features[i] for i in temp_idx[val_sub_idx]],
+            [features[i] for i in temp_idx[test_sub_idx]]
+        ))
 
-        train_set = [features[i] for i in train_idx]
-        val_set   = [features[i] for i in val_idx]
-        test_set  = [features[i] for i in test_idx]
+        split_seed += 1
 
-        datasets.append((train_set, val_set, test_set))
+    if len(datasets) < n_datasets:
+        raise RuntimeError(
+            f"Only generated {len(datasets)} valid splits "
+            f"after {attempts} attempts."
+        )
 
     return datasets
+
+def normalize(features, mean=None, std=None, eps=1e-8):
+    """
+    Z-score normalization for BLOSUM features.
+
+    features: np.ndarray of shape (N, [?])
+    mean, std: computed on training set and reused for val/test
+    """
+    if mean is None:
+        mean = features.mean(axis=0)   
+    if std is None:
+        std = features.std(axis=0)    
+
+    features_norm = (features - mean) / (std + eps)
+    return features_norm, mean, std
+
 # ============================================================
 # DATA
 # ============================================================
-def load_features():
+def load_features(normalize_features=True):
     '''
-     Returns List[Tuple[EMB, Contact_MAP, MIC]] for sequence
+    Returns:
+        features: List[(emb, cm, physio_norm, blosum_norm, mic)]
+        stats: dict with normalization statistics
     '''
     df = pd.read_csv(CONTACT_MAP_FILE)
     seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE)
 
-   
-    physio_dict = PFE.load_physio_features_as_numpy()
+    blosum_dict = load_blosum62_features(csv_path=BLOSUM62_FILE) #20 features
+    physio_dict = PFE.load_physio_features_as_numpy_all() #load_physio_features_as_numpy() #32 features
+
     features = []
+    physio_list = []
+    blosum_list = []
+
+    # -------------------------------
+    # Load raw features
+    # -------------------------------
     for seq, emb in zip(seqs, embs):
-        cm, mic = get_contact_map(seq, df)
+        cm, mic = get_contact_map(seq, df)#mic values are normalized between 0 and 1
+
         emb = np.asarray(emb, np.float32)
         if emb.ndim == 1:
             emb = emb.reshape(-1, EMB_DIM)
-        
-        physio_feature = physio_dict[seq]
-        features.append((emb, cm, physio_feature, mic))
+
+        if seq not in physio_dict or seq not in blosum_dict:
+            raise ValueError(f"Sequence {seq} missing in physio or blosum features.")
+
+        physio_feature = physio_dict[seq].astype(np.float32)
+        blosum_feature = blosum_dict[seq].astype(np.float32)
+
+        features.append([emb, cm, physio_feature, blosum_feature, mic])
+        physio_list.append(physio_feature)
+        blosum_list.append(blosum_feature)
+
+    # -------------------------------
+    # Normalize (replace in features)
+    # -------------------------------
+    if normalize_features:
+        physio_arr = np.stack(physio_list)   # (N, Dp)
+        blosum_arr = np.stack(blosum_list)   # (N, 20)
+
+        physio_norm, physio_mean, physio_std = normalize(physio_arr)
+        blosum_norm, blosum_mean, blosum_std = normalize(blosum_arr)
+
+        # Replace raw values with normalized ones
+        for i in range(len(features)):
+            features[i][2] = physio_norm[i] #Physio index 2
+            features[i][3] = blosum_norm[i] #Blosum index 3
+
+    # -------------------------------
+    # Logging
+    # -------------------------------
+    sample_feature = features[0]
+    print(f"Loaded features for {len(features)} sequences.")
+    print("****Sample feature shapes:**********")
+    print(f"  Embedding: {sample_feature[0].shape}")
+    print(f"  Contact Map: {sample_feature[1].shape}")
+    print(f"  Physio-Chemical Features (normalized): {sample_feature[2].shape}")
+    print(f"  BLOSUM62 Features (normalized): {sample_feature[3].shape}")
+    print(f"  MIC: {sample_feature[4]}")
+    print("Physio-Chemical Features normalization stats:")
+    print(f"    Mean: {physio_mean}")
+    print(f"    Std: {physio_std}")
+    print("BLOSUM62 Features normalization stats:")
+    print(f"    Mean: {blosum_mean}")
+    print(f"    Std: {blosum_std}")
+
     return features
+
 
 def save_datasets(save_path):
     """
@@ -140,11 +229,28 @@ def load_datasets(datasets_index=[0, 1, 2, 3, 4]):
 
     return [datasets[i] for i in datasets_index]
 
+def save_results_table(results, filename="metrics_results.csv"):
+    """
+    Save evaluation metrics to a tabular CSV file.
+
+    Args:
+        results (list of dict): List of metric dictionaries
+        filename (str): Output CSV filename
+    """
+    df = pd.DataFrame(results)
+
+    # Optional: add run index
+    df.insert(0, "Run", range(1, len(df) + 1))
+
+    df.to_csv(filename, index=False)
+    print(f"Saved results to {filename}")
+
+    return df
 
     
 
 if __name__ == "__main__":
-    # save_datasets(DATASET_PATH)
-    datasets = load_datasets()
+    save_datasets(DATASET_PATH)
+    # datasets = load_datasets()
 
 

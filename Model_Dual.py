@@ -24,7 +24,8 @@ class GraphAttention(layers.Layer):
         self.kernel = self.add_weight(
             name="kernel",
             shape=(feature_dim, self.units),
-            initializer=self.kernel_initializer,
+            # initializer=self.kernel_initializer,
+            initializer = keras.initializers.GlorotUniform(seed=42),
             regularizer=self.kernel_regularizer,
             trainable=True,
         )
@@ -32,7 +33,7 @@ class GraphAttention(layers.Layer):
         self.kernel_attention = self.add_weight(
             name="kernel_attention",
             shape=(self.units * 2, 1),
-            initializer=self.kernel_initializer,
+            initializer=keras.initializers.GlorotUniform(seed=43),
             regularizer=self.kernel_regularizer,
             trainable=True,
         )
@@ -50,6 +51,7 @@ class GraphAttention(layers.Layer):
         num_nodes = tf.shape(node_states)[0]
         node_states_transformed = tf.matmul(node_states, self.kernel)
         
+
         # Handle empty edge case with tf.cond
         def process_edges():
             # Gather node features for each edge
@@ -78,9 +80,12 @@ class GraphAttention(layers.Layer):
             
             # Gather sum for each edge (instead of repeat + bincount)
             attention_scores_sum_gathered = tf.gather(attention_scores_sum, edges[:, 0])
-            
-            # Normalize attention scores
+
+            # Normalize attention scores 
             attention_scores_norm = attention_scores / (attention_scores_sum_gathered + 1e-8)
+
+            # Compute Degree-Aware attention normalization | normal attention normalization is better 
+            # attention_scores_norm = degree_aware_attn_norm(attention_scores, attention_scores_sum_gathered, edges, num_nodes)
 
             # Aggregate neighbor features
             node_states_neighbors = tf.gather(node_states_transformed, edges[:, 1])
@@ -90,6 +95,8 @@ class GraphAttention(layers.Layer):
                 num_segments=num_nodes,
             )
             return out
+
+        
         
         def no_edges():
             return node_states_transformed
@@ -157,78 +164,75 @@ class PartitionPadding(layers.Layer):
     def call(self, inputs):
         atom_features, molecule_indicator = inputs
 
-        atom_features_partitioned = tf.dynamic_partition(
-            atom_features, molecule_indicator, self.batch_size
+        # Convert to RaggedTensor grouped by molecule_indicator
+        ragged_features = tf.RaggedTensor.from_value_rowids(
+            atom_features, molecule_indicator, nrows=self.batch_size
         )
 
-        num_atoms = [tf.shape(f)[0] for f in atom_features_partitioned]
-        max_num_atoms = tf.reduce_max(num_atoms)
+        # Pad each protein to max length in the batch
+        padded = ragged_features.to_tensor(default_value=0.0)
 
-        atom_features_stacked = tf.stack(
-            [
-                tf.pad(f, [(0, max_num_atoms - n), (0, 0)])
-                for f, n in zip(atom_features_partitioned, num_atoms)
-            ],
-            axis=0,
-        )
-
-        gather_indices = tf.where(
-            tf.reduce_sum(atom_features_stacked, axis=(1, 2)) != 0
-        )
-        gather_indices = tf.squeeze(gather_indices, axis=-1)
-
-        return tf.gather(atom_features_stacked, gather_indices, axis=0)
+        return padded  # shape: [batch_size, max_num_nodes, feature_dim]
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "batch_size": self.batch_size,
-        })
+        config.update({"batch_size": self.batch_size})
         return config
+
 
 
 @tf.keras.utils.register_keras_serializable()
 class TransformerEncoderReadout(layers.Layer):
+    """
+    Protein-level Transformer encoder.
+    Input:  [batch_size, feature_dim]
+    Output: [batch_size, feature_dim]
+    """
     def __init__(
         self,
         num_heads=8,
-        embed_dim=64,
+        embed_dim=256,
         dense_dim=512,
-        batch_size=32,
-        **kwargs,
+        dropout=0.1,
+        **kwargs
     ):
         super().__init__(**kwargs)
-
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.dense_dim = dense_dim
-        self.batch_size = batch_size
+        self.dropout = dropout
 
-        self.partition_padding = PartitionPadding(batch_size)
-        self.attention = layers.MultiHeadAttention(num_heads, embed_dim)
-        self.dense_proj = keras.Sequential(
-            [
-                layers.Dense(dense_dim, activation="relu"),
-                layers.Dense(embed_dim),
-            ]
+        self.self_attn = layers.MultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=embed_dim
         )
-        self.layernorm_1 = layers.LayerNormalization()
-        self.layernorm_2 = layers.LayerNormalization()
-        self.average_pooling = layers.GlobalAveragePooling1D()
+        self.ffn = keras.Sequential([
+            layers.Dense(dense_dim, activation="gelu", kernel_initializer=keras.initializers.GlorotUniform(seed=101)),
+            layers.Dense(embed_dim, kernel_initializer=keras.initializers.GlorotUniform(seed=102)),
+        ])
 
-    def call(self, inputs):
-        x = self.partition_padding(inputs)
+        self.norm1 = layers.LayerNormalization()
+        self.norm2 = layers.LayerNormalization()
+        self.drop1 = layers.Dropout(dropout,seed=120)
+        self.drop2 = layers.Dropout(dropout, seed=121)
 
-        padding_mask = tf.reduce_any(tf.not_equal(x, 0.0), axis=-1)
-        padding_mask = padding_mask[:, tf.newaxis, tf.newaxis, :]
+    def call(self, x, training=False):
+        """
+        x: [batch, embed_dim]
+        """
+        # Add fake sequence length = 1
+        x = x[:, tf.newaxis, :]  # [B, 1, D]
 
-        attention_output = self.attention(x, x, attention_mask=padding_mask)
-        proj_input = self.layernorm_1(x + attention_output)
-        proj_output = self.layernorm_2(
-            proj_input + self.dense_proj(proj_input)
-        )
+        # Self-attention
+        attn_out = self.self_attn(x, x, training=training)
+        x = self.norm1(x + self.drop1(attn_out, training=training))
 
-        return self.average_pooling(proj_output)
+        # Feed-forward
+        ffn_out = self.ffn(x, training=training)
+        x = self.norm2(x + self.drop2(ffn_out, training=training))
+
+        # Remove fake sequence dimension
+        return tf.squeeze(x, axis=1)
 
     def get_config(self):
         config = super().get_config()
@@ -236,9 +240,10 @@ class TransformerEncoderReadout(layers.Layer):
             "num_heads": self.num_heads,
             "embed_dim": self.embed_dim,
             "dense_dim": self.dense_dim,
-            "batch_size": self.batch_size,
+            "dropout": self.dropout,
         })
         return config
+
 
         
 def GraphAttentionNetwork(atom_dim, hidden_units, num_heads, num_layers, batch_size=32, num_classes=1):
@@ -250,7 +255,7 @@ def GraphAttentionNetwork(atom_dim, hidden_units, num_heads, num_layers, batch_s
     molecule_indicator = layers.Input((), dtype="int32", name="molecule_indicator")
     
     # Preprocess features
-    x = layers.Dense(hidden_units * num_heads, activation="relu")(node_features)
+    x = layers.Dense(hidden_units * num_heads, activation="relu", kernel_initializer=keras.initializers.GlorotUniform(seed=111))(node_features)
     
     # Multi-head graph attention layers
     for _ in range(num_layers):
@@ -261,12 +266,14 @@ def GraphAttentionNetwork(atom_dim, hidden_units, num_heads, num_layers, batch_s
         x = x_att + residual   #  No LayerNorm here
     
     # Transformer encoder readout
-    x = TransformerEncoderReadout(embed_dim=hidden_units*num_heads, batch_size=batch_size)([x, molecule_indicator])
+    # x = TransformerEncoderReadout(embed_dim=hidden_units*num_heads, batch_size=batch_size)([x, molecule_indicator])
+    x = TransformerEncoderReadout(embed_dim=hidden_units * num_heads)(x)
+
     
     x = layers.LayerNormalization()(x)   # New | Graph-level normalization
 
     # Output layer (linear for regression)
-    outputs = layers.Dense(num_classes)(x)  # No activation for regression
+    outputs = layers.Dense(num_classes, kernel_initializer=keras.initializers.GlorotUniform(seed=113))(x)  # No activation for regression
     
     # Build model
     model = keras.models.Model(
