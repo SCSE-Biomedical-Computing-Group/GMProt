@@ -211,7 +211,7 @@ class DualBranchGNN_PCF(keras.Model):
             num_heads=4,
             num_layers=3,#1 increase graph depth
             batch_size=BATCH_SIZE,
-            num_classes=1
+            output_dim=1
         )
         self.gnn_proj = layers.Dense(128, activation="gelu")
 

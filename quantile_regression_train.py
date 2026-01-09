@@ -231,7 +231,7 @@ class DualBranchGNN_PCF(keras.Model):
             num_heads=cfg.gnn_heads,
             num_layers=cfg.gnn_layers,
             batch_size=cfg.batch_size,
-            num_classes=1
+            output_dim=1
         )
         self.gnn_proj = layers.Dense(cfg.gnn_dense, activation="gelu")
 

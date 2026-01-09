@@ -4,6 +4,10 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
+from experimental_config import ExperimentConfig
+
+cfg = ExperimentConfig()
+
 @tf.keras.utils.register_keras_serializable()
 class GraphAttention(layers.Layer):
     def __init__(
@@ -58,7 +62,7 @@ class GraphAttention(layers.Layer):
             node_states_expanded = tf.gather(node_states_transformed, edges)
             node_states_expanded = tf.reshape(node_states_expanded, (tf.shape(edges)[0], -1))
 
-            # Compute attention scores
+            # Compute attention scores | This is attention energy computation, not a feature transformation. so leaky relu is fine
             attention_scores = tf.nn.leaky_relu(tf.matmul(node_states_expanded, self.kernel_attention))
             attention_scores = tf.squeeze(attention_scores, -1)
 
@@ -143,7 +147,7 @@ class MultiHeadGraphAttention(layers.Layer):
         else:
             outputs = tf.reduce_mean(tf.stack(outputs, axis=-1), axis=-1)
 
-        return tf.nn.relu(outputs)
+        return  tf.nn.relu(outputs) #|tf.nn.gelu(outputs) #gelu performed badly here
 
 
     def get_config(self):
@@ -207,7 +211,7 @@ class TransformerEncoderReadout(layers.Layer):
             key_dim=embed_dim
         )
         self.ffn = keras.Sequential([
-            layers.Dense(dense_dim, activation="gelu", kernel_initializer=keras.initializers.GlorotUniform(seed=101)),
+            layers.Dense(dense_dim, activation=cfg.ffn_A, kernel_initializer=keras.initializers.GlorotUniform(seed=101)),
             layers.Dense(embed_dim, kernel_initializer=keras.initializers.GlorotUniform(seed=102)),
         ])
 
@@ -246,7 +250,7 @@ class TransformerEncoderReadout(layers.Layer):
 
 
         
-def GraphAttentionNetwork(atom_dim, hidden_units, num_heads, num_layers, batch_size=32, num_classes=1):
+def GraphAttentionNetwork(atom_dim, hidden_units, num_heads, num_layers, batch_size=32, output_dim=1):
     
     # Input layers
     node_features = layers.Input((atom_dim,), dtype="float32", name="atom_features")
@@ -254,26 +258,23 @@ def GraphAttentionNetwork(atom_dim, hidden_units, num_heads, num_layers, batch_s
     edge_weights = layers.Input((), dtype="float32", name="edge_weights")  # NEW
     molecule_indicator = layers.Input((), dtype="int32", name="molecule_indicator")
     
-    # Preprocess features
-    x = layers.Dense(hidden_units * num_heads, activation="relu", kernel_initializer=keras.initializers.GlorotUniform(seed=111))(node_features)
+    # Preprocess features | gelu  performed bad here
+    x = layers.Dense(hidden_units * num_heads, activation=cfg.x_A, kernel_initializer=keras.initializers.GlorotUniform(seed=111))(node_features)
     
     # Multi-head graph attention layers
     for _ in range(num_layers):
-        # x = MultiHeadGraphAttention(hidden_units, num_heads)([x, pair_indices, edge_weights]) + x #old
-
         residual = x
         x_att = MultiHeadGraphAttention(hidden_units, num_heads)([x, pair_indices, edge_weights])
         x = x_att + residual   #  No LayerNorm here
     
     # Transformer encoder readout
-    # x = TransformerEncoderReadout(embed_dim=hidden_units*num_heads, batch_size=batch_size)([x, molecule_indicator])
     x = TransformerEncoderReadout(embed_dim=hidden_units * num_heads)(x)
 
     
     x = layers.LayerNormalization()(x)   # New | Graph-level normalization
 
     # Output layer (linear for regression)
-    outputs = layers.Dense(num_classes, kernel_initializer=keras.initializers.GlorotUniform(seed=113))(x)  # No activation for regression
+    outputs = layers.Dense(output_dim, kernel_initializer=keras.initializers.GlorotUniform(seed=113))(x)  # No activation for regression
     
     # Build model
     model = keras.models.Model(

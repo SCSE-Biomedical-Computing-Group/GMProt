@@ -8,7 +8,7 @@ class ExperimentConfig:
     epochs: int = 300
     lr: float = 3e-4
     seed: int = 42
-    patience: int = 100
+    patience: int = 200
 
     #physio features
     physio_feature_dim: int = 32
@@ -51,6 +51,31 @@ class ExperimentConfig:
 
     #Attention Visualization graphs
     visualization_path : str = "./visualization/atten"
+
+    #*************Activation Functions Dual Attention Fusion Train.py***********# 
+    #Sequence branch Activation
+    seq_proj_A: str = "gelu"
+    seq_out_A: str = "gelu"
+    seq_bottleneck_A: str = "gelu"
+
+    #Graph Branch Activation
+    gnn_proj_A: str = "gelu"
+    gnn_bottleneck_A: str = "gelu"
+
+    #Physio Branch Activation
+    physio_proj_A: str = "gelu"
+    physio_bottleneck_A: str = "gelu"
+
+
+    #**************Model_Dual.py activations****************#
+    #Transformer Encoder Readout activations
+    ffn_A: str = "gelu"
+    
+    #GraphAttentionNetwork
+    x_A: str = "relu"
+
+
+
 
     def save_config(self, path):
         with open(path, "w") as f:

@@ -53,7 +53,9 @@ set_global_seed(cfg.seed)
 def generator(X):
     """Yield each sample for tf.data"""
     for emb, cm, p_feat, blosum_feat, y in X:
-        rows, cols = np.where(cm > 0)
+        rows, cols = np.where(cm > 0) #return row array, col array | Each (rows[i], cols[i]) is an edge from node row[i] to node cols[i]
+        
+        #convert two 1D array into edge list [[0, 1],[1, 3] ] ...| shape num_edges x 2 | needed for GAT Input
         edges = np.stack([rows, cols], axis=1).astype(np.int64) if rows.size else np.zeros((0, 2), dtype=np.int64)
         weights = np.ones(len(rows), dtype=np.float32) if rows.size else np.zeros((0,), dtype=np.float32)
         p_feat_updated = np.concatenate([p_feat, blosum_feat], axis=0).astype(np.float32) 
@@ -80,20 +82,40 @@ def make_dataset(X, shuffle=False):
     return ds
 
 def prepare_batch(batched_emb, batched_edges, batched_weights, batched_physio, batched_labels):
+    '''
+        You have a batch of graphs represented as ragged tensors(variable lenghts).
+        Each graph has its own set of nodes and edges. Here Node features are ProtT5 embeddings.
+        Edges are derived from contact maps.
+    
+        It will prepare batched inputs for the batched graph neural network model.
+        Adjust edge indices based on node offsets in the batch.
+        Prot_ids indicate which peptide each node belongs to in the batch.
+
+        So, instead of processing each graph individually, we can process the entire batch together.
+
+
+    '''
     labels = tf.cast(batched_labels, tf.float32)
     if len(labels.shape) == 1:
         labels = tf.expand_dims(labels, axis=-1)
 
-    num_nodes = batched_emb.row_lengths()
-    num_edges = batched_edges.row_lengths()
-    nodes_flat = batched_emb.merge_dims(0, 1)
+    num_nodes = batched_emb.row_lengths() #tf.RaggedTensor |  Shape: [batch_size, None, 1024] | (None: number of seqs in this batch)
+
+    num_edges = batched_edges.row_lengths() #[[1, 2], [0, 2, 5], [2,3]] -> [2, 3, 2] number of edges per graph in batch
+    nodes_flat = batched_emb.merge_dims(0, 1) #[batch, nodes, features] -> [total_nodes, features]
     edges_flat = batched_edges.merge_dims(0, 1)
     weights_flat = batched_weights.merge_dims(0, 1)
-    offsets = tf.concat([[0], tf.cumsum(num_nodes)[:-1]], axis=0)
-    edge_rowids = batched_edges.value_rowids()
-    edge_offsets = tf.gather(offsets, edge_rowids)
-    edges_flat = edges_flat + tf.cast(tf.expand_dims(edge_offsets, axis=-1), edges_flat.dtype)
-    prot_ids = tf.repeat(tf.range(tf.shape(num_nodes)[0]), num_nodes)
+
+    #Added 0 ,  cumulative sum of num_nodes excluding last element. eg: [0, 2, 4, 5] ->[0, 2, 6, 11] 
+    offsets = tf.concat([[0], tf.cumsum(num_nodes)[:-1]], axis=0) #offsets to adjust edge indices for batching
+    
+    edge_rowids = batched_edges.value_rowids() #Get which graph, each edge belongs to in the batch
+   
+    #“Pick rows from a tensor based on an index list. |  gather(input, indices)”
+    edge_offsets = tf.gather(offsets, edge_rowids) #get offset for each edge based on which graph it belongs to
+    edges_flat = edges_flat + tf.cast(tf.expand_dims(edge_offsets, axis=-1), edges_flat.dtype) #adjust edge indices based on node offsets in the batch
+   
+    prot_ids = tf.repeat(tf.range(tf.shape(num_nodes)[0]), num_nodes) #indicator for which node belongs to which graph in the batch
     prot_ids = tf.cast(prot_ids, tf.int32)
     physio_flat = tf.cast(batched_physio, tf.float32)
 
@@ -112,16 +134,17 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
     def __init__(self, cfg: ExperimentConfig, **kwargs):
         super().__init__(**kwargs)
         self.cfg = cfg
-        # Sequence branch
-        self.seq_proj = layers.Dense(cfg.seq_dense1, activation="gelu")
+        # Sequence branch (data from  node-features ie. ProtT5 embeddings)
+        self.seq_proj = layers.Dense(cfg.seq_dense1, activation=cfg.seq_proj_A)
         self.seq_transformer = TransformerEncoderReadout(
             num_heads=cfg.transformer_heads,
             embed_dim=cfg.seq_dense1,
             dense_dim=cfg.transformer_ff_dim,
             batch_size=cfg.batch_size
         )
-        self.seq_out = layers.Dense(cfg.seq_dense2, activation="gelu")
-        self.seq_bottleneck = layers.Dense(cfg.seq_bottleneck_dim, activation="gelu")
+        self.seq_out = layers.Dense(cfg.seq_dense2, activation=cfg.seq_out_A)
+        self.seq_bottleneck = layers.Dense(cfg.seq_bottleneck_dim, activation=cfg.seq_bottleneck_A)
+        
         # Graph branch
         self.gnn = GraphAttentionNetwork(
             atom_dim=EMB_DIM,
@@ -129,14 +152,15 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
             num_heads=cfg.gnn_heads,
             num_layers=cfg.gnn_layers,
             batch_size=cfg.batch_size,
-            num_classes=1
+            output_dim=1
         )
-        self.gnn_proj = layers.Dense(cfg.gnn_dense, activation="gelu")
-        self.gnn_bottleneck = layers.Dense(cfg.gnn_bottleneck_dim, activation="gelu")
-        # Physio branch
-        self.physio_proj = layers.Dense(cfg.physio_proj, activation="gelu")
-        self.physio_bottleneck = layers.Dense(cfg.physio_bottleneck_dim, activation="gelu")
+        self.gnn_proj = layers.Dense(cfg.gnn_dense, activation=cfg.gnn_proj_A)
+        self.gnn_bottleneck = layers.Dense(cfg.gnn_bottleneck_dim, activation=cfg.gnn_bottleneck_A) 
         
+        # Physio branch
+        self.physio_proj = layers.Dense(cfg.physio_proj, activation=cfg.physio_proj_A) 
+        self.physio_bottleneck = layers.Dense(cfg.physio_bottleneck_dim, activation=cfg.physio_bottleneck_A) 
+
         # Fusion
         self.attn_dense = layers.Dense(1)
         self.fuse_norm = layers.LayerNormalization()
@@ -167,7 +191,7 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         physio = inputs['physio_features']
 
         # Sequence branch
-        mean_pool = tf.math.unsorted_segment_mean(nodes, prot_ids, tf.reduce_max(prot_ids) + 1)
+        mean_pool = tf.math.unsorted_segment_mean(nodes, prot_ids, tf.reduce_max(prot_ids) + 1) #It computes one graph-level embedding per protein by averaging all node embeddings that belong to the same protein.
         seq = self.seq_proj(mean_pool)
         seq = self.seq_transformer(seq, training=training)
         seq = self.seq_out(seq)
@@ -178,13 +202,15 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         gnn_nodes = self.gnn_proj(gnn_nodes)
         gnn_feat = tf.math.unsorted_segment_mean(gnn_nodes, prot_ids, tf.reduce_max(prot_ids) + 1)
         gnn_feat = self.gnn_bottleneck(gnn_feat)
+        
         # Physio branch
-        physio_feat = self.physio_proj(physio)
+        physio_feat = self.physio_proj(physio) #Physico-chemical + Blosum features 
         physio_feat = self.physio_bottleneck(physio_feat)
+       
         # Attention fusion
         concat_feats = tf.stack([seq_feat, gnn_feat, physio_feat], axis=1)
         attn_scores = tf.nn.softmax(self.attn_dense(concat_feats), axis=1)
-        fused = tf.reduce_sum(concat_feats * attn_scores, axis=1)
+        fused = tf.reduce_sum(concat_feats * attn_scores, axis=1) #Weighted sum based on attention scores
         fused = self.fuse_norm(fused)
         fused = self.fuse_dropout(fused, training=training)
         # Output
@@ -236,7 +262,7 @@ def train_model(train_f, val_f, test_f, model_name, mdl_index):
     model = ImprovedDualBranchGNN_AttentionFusion(cfg)
     model.compile(
         optimizer=keras.optimizers.Adam(cfg.lr),
-        loss=tf.keras.losses.Huber(), #tf.keras.losses.MeanSquaredError() #
+        loss=tf.keras.losses.MeanSquaredError(), #tf.keras.losses.Huber(delta=1.0)
         metrics=[tf.keras.metrics.RootMeanSquaredError(name="rmse")]
     )
     
@@ -251,7 +277,7 @@ def train_model(train_f, val_f, test_f, model_name, mdl_index):
     callbacks = [
         EarlyStopping(monitor="val_rmse", mode="min", patience=cfg.patience, restore_best_weights=True),
         ModelCheckpoint(str(model_path / f"model_{mdl_index}"), save_best_only=True, monitor='val_rmse', mode='min'),
-        ReduceLROnPlateau(monitor="val_rmse", factor=0.5, patience=5, min_lr=1e-6),
+        ReduceLROnPlateau(monitor="val_rmse", factor=0.5, patience=50, min_lr=1e-6),
         ValPearsonCallback(val_ds, val_pearson_history)
     ]
 
@@ -322,7 +348,7 @@ def execute(model_name, datasets_index=[0]):
 
 
 if __name__ == "__main__":
-    model_name = "attn_huber_05"
+    model_name = "attn_mse_04_reverted"
 
     datasets_index = [0, 1, 2, 3, 4]
     metrics = execute(model_name=model_name, datasets_index=datasets_index)
