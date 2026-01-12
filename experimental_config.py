@@ -74,6 +74,12 @@ class ExperimentConfig:
     #GraphAttentionNetwork
     x_A: str = "relu"
 
+    #Position encoding extractor
+    sinusoidal_feature_dim : int = 32 #Sinusoidal position encoding dimension
+    seq_max_len : int = 128  #Maximum sequence length for positional encoding
+    postion_aware_feature_dim : int = 60 #Position aware one-hot encoding dimension
+
+
 
 
 

@@ -27,10 +27,10 @@ from scipy.stats import pearsonr, kendalltau
 
 import data_util, data_visualization
 from experimental_config import ExperimentConfig
-from Model_Dual import GraphAttentionNetwork,  TransformerEncoderReadout
+from Model_Dual import GraphAttentionNetwork,  TransformerEncoderReadout, CrossAttentionFusion
 from validation_pearson import ValPearsonCallback
 # --------------------------- GPU Setup ---------------------------
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 gpus = tf.config.list_physical_devices("GPU")
 for g in gpus:
     tf.config.experimental.set_memory_growth(g, True)
@@ -38,7 +38,7 @@ for g in gpus:
 # --------------------------- Hyperparameters ---------------------------
 cfg = ExperimentConfig()
 EMB_DIM = 1024
-PHYSIO_DIM = cfg.physio_feature_dim + cfg.blosum_feature_dim  #32+20 #using only physio physio (32) + Blosum features(20)
+PHYSIO_DIM = cfg.physio_feature_dim + cfg.blosum_feature_dim + cfg.sinusoidal_feature_dim +cfg.postion_aware_feature_dim  #32+20+32+64=148 #using only physio physio (32) + Blosum features(20) + Sinusoidal PE(32)
 
 # --------------------------- Reproducibility ---------------------------
 def set_global_seed(seed: int = 42):
@@ -52,13 +52,13 @@ set_global_seed(cfg.seed)
 # --------------------------- Dataset ---------------------------
 def generator(X):
     """Yield each sample for tf.data"""
-    for emb, cm, p_feat, blosum_feat, y in X:
+    for emb, cm, p_feat, blosum_feat, sinu_feat, pos_aware_feat, y in X:
         rows, cols = np.where(cm > 0) #return row array, col array | Each (rows[i], cols[i]) is an edge from node row[i] to node cols[i]
         
         #convert two 1D array into edge list [[0, 1],[1, 3] ] ...| shape num_edges x 2 | needed for GAT Input
         edges = np.stack([rows, cols], axis=1).astype(np.int64) if rows.size else np.zeros((0, 2), dtype=np.int64)
         weights = np.ones(len(rows), dtype=np.float32) if rows.size else np.zeros((0,), dtype=np.float32)
-        p_feat_updated = np.concatenate([p_feat, blosum_feat], axis=0).astype(np.float32) 
+        p_feat_updated = np.concatenate([p_feat, blosum_feat, sinu_feat, pos_aware_feat], axis=0).astype(np.float32) 
         yield emb, edges, weights, p_feat_updated, np.array([y], dtype=np.float32)
 
 def make_dataset(X, shuffle=False):
@@ -134,6 +134,9 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
     def __init__(self, cfg: ExperimentConfig, **kwargs):
         super().__init__(**kwargs)
         self.cfg = cfg
+
+
+
         # Sequence branch (data from  node-features ie. ProtT5 embeddings)
         self.seq_proj = layers.Dense(cfg.seq_dense1, activation=cfg.seq_proj_A)
         self.seq_transformer = TransformerEncoderReadout(
@@ -161,7 +164,15 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         self.physio_proj = layers.Dense(cfg.physio_proj, activation=cfg.physio_proj_A) 
         self.physio_bottleneck = layers.Dense(cfg.physio_bottleneck_dim, activation=cfg.physio_bottleneck_A) 
 
-        # Fusion
+       #Cross attention fusion layer
+        self.cross_attn_fusion = CrossAttentionFusion(
+            dim=cfg.seq_bottleneck_dim,   # must match seq_feat / gnn_feat / physio_feat dim
+            num_heads=4,
+            dropout=0.1
+        )
+       
+       
+       # Fusion
         self.attn_dense = layers.Dense(1)
         self.fuse_norm = layers.LayerNormalization()
         self.fuse_dropout = layers.Dropout(cfg.fuse_dropout)
@@ -207,14 +218,35 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         physio_feat = self.physio_proj(physio) #Physico-chemical + Blosum features 
         physio_feat = self.physio_bottleneck(physio_feat)
        
-        # Attention fusion
+        # Attention weighted feature fusion (how important is each branch)
+        fused = self.get_attention_weighted_feature_fused(training, seq_feat, gnn_feat, physio_feat)
+
+        #Try Cross-Attention based feature fusion (Didn't work well)
+        # fused = self.get_cross_attention_weighted_feature_fused(training, seq_feat, gnn_feat, physio_feat)
+        
+        # Output
+        return self.out(fused)
+
+    def get_attention_weighted_feature_fused(self, training, seq_feat, gnn_feat, physio_feat):
         concat_feats = tf.stack([seq_feat, gnn_feat, physio_feat], axis=1)
         attn_scores = tf.nn.softmax(self.attn_dense(concat_feats), axis=1)
         fused = tf.reduce_sum(concat_feats * attn_scores, axis=1) #Weighted sum based on attention scores
         fused = self.fuse_norm(fused)
         fused = self.fuse_dropout(fused, training=training)
-        # Output
-        return self.out(fused)
+        return fused
+    
+    def get_cross_attention_weighted_feature_fused(self, training, seq_feat, gnn_feat, physio_feat):
+        fused, attn_scores = self.cross_attn_fusion(
+            seq_feat,
+            gnn_feat,
+            physio_feat,
+            training=training
+
+        )
+        fused = self.fuse_norm(fused)
+        fused = self.fuse_dropout(fused, training=training)
+
+        return fused
 
 # --------------------------- Metrics ---------------------------
 def compute_metrics(model, dataset, model_path, model_index=0, visualize=True, write_results=True):
@@ -348,7 +380,7 @@ def execute(model_name, datasets_index=[0]):
 
 
 if __name__ == "__main__":
-    model_name = "attn_mse_04_reverted"
+    model_name = "attn_with_pos_aware"
 
     datasets_index = [0, 1, 2, 3, 4]
     metrics = execute(model_name=model_name, datasets_index=datasets_index)

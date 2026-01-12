@@ -9,11 +9,17 @@ import seqs_prott5 as prott5
 from extract_structural_features import get_contact_map
 import physiochem_feature_extractor as PFE
 from blosum62 import load_blosum62_features
+import position_encoding_extractor as PEE 
+import position_aware_features as PAF
+
 
 EMB_DIM = 1024
 CONTACT_MAP_FILE = "data/contact_map.csv"
 EMBEDDING_FILE = "data/prott5/prot_t5_xl_uniref50/prott5_residue_level.npz"
 BLOSUM62_FILE = "data/blosum62_features.csv"
+SINUSOIDAL_ENCODING_FILE = './data/sinusoidal_encoding.csv'
+POSITION_AWARE_FILE = "./data/position_aware_features.csv"
+
 DATASET_PATH = "data/five_fold/datasets.pkl"
 
 def stratified_train_val_test_splits(
@@ -27,11 +33,11 @@ def stratified_train_val_test_splits(
     max_attempts=100
 ):  
     '''
-    Features tuple :  emb, cm, physio_feature, blosum_feature, mic
+    Features tuple :  emb, cm, physio_feature, blosum_feature, sinu_feature, position_aware_feature, mic
     '''
     assert train_size + val_size + test_size == len(features)
 
-    mic_values = np.array([item[4] for item in features])
+    mic_values = np.array([item[6] for item in features])
     indices = np.arange(len(features))
 
     kbd = KBinsDiscretizer(
@@ -108,6 +114,12 @@ def normalize(features, mean=None, std=None, eps=1e-8):
 
     features: np.ndarray of shape (N, [?])
     mean, std: computed on training set and reused for val/test
+
+    Preserves realative scales between different feature dimensions.
+    Returns:
+        features_norm: normalized features
+        mean: mean used for normalization (per feature dimension). feautres dim is 20, there will be 20 means.
+        std: std used for normalization (per feature dimension)
     """
     if mean is None:
         mean = features.mean(axis=0)   
@@ -132,9 +144,18 @@ def load_features(normalize_features=True):
     blosum_dict = load_blosum62_features(csv_path=BLOSUM62_FILE) #20 features
     physio_dict = PFE.load_physio_features_as_numpy_all() #load_physio_features_as_numpy() #32 features
 
+
+    # Load sinusoidal positional encodings | dict[Seq1: np.ndarray (32,), ...]
+    sinusoidal_encoding_dict = PEE.load_sinusoidal_encoding(SINUSOIDAL_ENCODING_FILE)
+
+    #postion aware features
+    position_aware_dict = PAF.load_feature_csv_as_dict(POSITION_AWARE_FILE)
+
     features = []
     physio_list = []
     blosum_list = []
+    sinusoidal_encoding_list = []
+    position_aware_list = []
 
     # -------------------------------
     # Load raw features
@@ -146,15 +167,19 @@ def load_features(normalize_features=True):
         if emb.ndim == 1:
             emb = emb.reshape(-1, EMB_DIM)
 
-        if seq not in physio_dict or seq not in blosum_dict:
-            raise ValueError(f"Sequence {seq} missing in physio or blosum features.")
+        if seq not in physio_dict or seq not in blosum_dict or seq not in sinusoidal_encoding_dict or seq not in position_aware_dict:
+            raise ValueError(f"Sequence {seq} missing in physio or blosum or sinusoidal or position aware features.")
 
         physio_feature = physio_dict[seq].astype(np.float32)
         blosum_feature = blosum_dict[seq].astype(np.float32)
+        sinu_feature = sinusoidal_encoding_dict[seq].astype(np.float32)
+        position_aware_feature = position_aware_dict[seq].astype(np.float32)
 
-        features.append([emb, cm, physio_feature, blosum_feature, mic])
+        features.append([emb, cm, physio_feature, blosum_feature, sinu_feature, position_aware_feature, mic])
         physio_list.append(physio_feature)
         blosum_list.append(blosum_feature)
+        sinusoidal_encoding_list.append(sinusoidal_encoding_dict[seq])
+        position_aware_list.append(position_aware_feature)  
 
     # -------------------------------
     # Normalize (replace in features)
@@ -162,32 +187,34 @@ def load_features(normalize_features=True):
     if normalize_features:
         physio_arr = np.stack(physio_list)   # (N, Dp)
         blosum_arr = np.stack(blosum_list)   # (N, 20)
+        sino_arr  = np.stack(sinusoidal_encoding_list)  # (N, 32)
+        position_aware_arr = np.stack(position_aware_list)  # (N, 60)
 
         physio_norm, physio_mean, physio_std = normalize(physio_arr)
         blosum_norm, blosum_mean, blosum_std = normalize(blosum_arr)
-
+        sino_norm, sino_mean, sino_std = normalize(sino_arr) 
+        position_aware_norm, position_aware_mean, position_aware_std = normalize(position_aware_arr) 
+        
         # Replace raw values with normalized ones
         for i in range(len(features)):
             features[i][2] = physio_norm[i] #Physio index 2
             features[i][3] = blosum_norm[i] #Blosum index 3
-
-    # -------------------------------
+            features[i][4] = sino_norm[i]   # Sinusoidal index 4
+            features[i][5] = position_aware_norm[i] # Position aware index 5
+    
     # Logging
     # -------------------------------
-    sample_feature = features[0]
+    sample = features[0]
     print(f"Loaded features for {len(features)} sequences.")
-    print("****Sample feature shapes:**********")
-    print(f"  Embedding: {sample_feature[0].shape}")
-    print(f"  Contact Map: {sample_feature[1].shape}")
-    print(f"  Physio-Chemical Features (normalized): {sample_feature[2].shape}")
-    print(f"  BLOSUM62 Features (normalized): {sample_feature[3].shape}")
-    print(f"  MIC: {sample_feature[4]}")
-    print("Physio-Chemical Features normalization stats:")
-    print(f"    Mean: {physio_mean}")
-    print(f"    Std: {physio_std}")
-    print("BLOSUM62 Features normalization stats:")
-    print(f"    Mean: {blosum_mean}")
-    print(f"    Std: {blosum_std}")
+    print("****Sample feature shapes:****")
+    print(f"  Embedding: {sample[0].shape}")
+    print(f"  Contact Map: {sample[1].shape}")
+    print(f"  Physio-Chemical (normalized): {sample[2].shape}")
+    print(f"  BLOSUM62 (normalized): {sample[3].shape}")
+    print(f"  Sinusoidal PE (normalized) shape: {sample[4].shape}")
+    print(f"  Position Aware (normalized): {sample[5].shape}")
+    print(f"  MIC: {sample[6]}")
+
 
     return features
 
