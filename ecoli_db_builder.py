@@ -191,7 +191,7 @@ def save_preprocessed_ecoli(data_root=None, grampa_file=None):
     df, negatives_count = remove_negative_mic(df)
     df, duplicate_count = count_and_remove_duplicates(df)
 
-    df, train_stats = normalize_log_mic(df, value_col="value", save_stats_path="mic_stats.pkl")
+    # df, train_stats = normalize_log_mic(df, value_col="value", save_stats_path="mic_stats.pkl")
 
 
     count_records_by_db(df)  # Count How many records belongs to each db

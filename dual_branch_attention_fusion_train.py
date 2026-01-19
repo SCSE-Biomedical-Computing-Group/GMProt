@@ -309,7 +309,7 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         seq_cnn_feat = self.seq_cnn_dropout(seq_cnn_feat, training=training)
 
         #new trick : Instead of letting CNN be a full branch, making it gate ProtT5:
-        seq_feat = seq_feat * (1 + 0.3 * tf.tanh(seq_cnn_feat)) #gating trick(used in alphafold) for cnn+protT5
+        seq_feat = seq_feat * (1 + cfg.cnn_gating_threshold * tf.tanh(seq_cnn_feat)) #gating trick(used in alphafold) for cnn+protT5
 
 
         # Attention weighted feature fusion (how important is each branch)
@@ -480,7 +480,7 @@ def execute(model_name, datasets_index=[0]):
 
 
 if __name__ == "__main__":
-    model_name = "attn_with_sinusoidal_pe_cnn_1_1" 
+    model_name = "attn_with_sinusoidal_pe_cnn_1_8"
 
     datasets_index = [0, 1, 2, 3, 4]
     metrics = execute(model_name=model_name, datasets_index=datasets_index)
