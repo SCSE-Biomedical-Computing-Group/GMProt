@@ -28,7 +28,7 @@ def create_fast_file(seq_list: List[str], fasta_save_path: str):
     
     print(f"FASTA file saved with {len(records)} sequences at: {fasta_save_path}")
 
-def build_fasta_db(csv_path, fasta_save_path):
+def build_fasta_db(csv_path, fasta_save_path, file_prefix="ecoli"):
     '''
     Using CSV Path it creates Fasta files grouped by sequence lenght
     and saves.  
@@ -38,7 +38,7 @@ def build_fasta_db(csv_path, fasta_save_path):
     os.makedirs(fasta_save_path, exist_ok=True)
 
     for group_name, seq_list in seq_groups.items():
-        file_name = f"ecoli_{group_name}.fasta"
+        file_name = f"{file_prefix}_{group_name}.fasta"
         save_full_path = os.path.join(fasta_save_path, file_name)
         create_fast_file(seq_list, save_full_path)
 
@@ -62,7 +62,7 @@ def create_fasta_file_from_single_seq(sequence, save_full_path, seq_name="sequen
             f.write(sequence[i:i+60] + "\n")
 
 
-def build_fasta_per_sequence(csv_path, fasta_save_path):
+def build_fasta_per_sequence(csv_path, fasta_save_path, file_prefix="ecoli"):
     '''
     Generates one fasta file per sequence for each group.
     and saves.  
@@ -75,7 +75,7 @@ def build_fasta_per_sequence(csv_path, fasta_save_path):
         os.makedirs(group_path, exist_ok=True)
 
         for index, sequence in enumerate(seq_list, start=1):
-            file_name = f"ecoli_{group_name}_{index}.fasta"
+            file_name = f"{file_prefix}_{group_name}_{index}.fasta"
 
             save_full_path = os.path.join(fasta_save_path, group_name, file_name)
             create_fasta_file_from_single_seq(sequence, save_full_path, seq_name=f"seq_{index}")
@@ -83,8 +83,15 @@ def build_fasta_per_sequence(csv_path, fasta_save_path):
 
 
 if __name__ == "__main__":
-    csv_path = 'data/ecoli_normalized.csv'
-    fasta_save_path = "data/fasta"
-    # build_fasta_db(csv_path, fasta_save_path)
-    build_fasta_per_sequence(csv_path, fasta_save_path)
+    # csv_path_ecoli =  'data/ecoli_normalized.csv'
+    # fasta_save_path_ecoli = "data/fasta"
+    # file_prefix_ecoli = "ecoli"
+
+    csv_path_staph =  'data/s_aureus_cleaned.csv'
+    fasta_save_path_staph = "data/fasta_stapc"
+    file_prefix_staph = "stapc"
+
+    # build_fasta_db(csv_path, fasta_save_path, file_prefix=file_prefix)
+    # build_fasta_per_sequence(csv_path_ecoli, fasta_save_path_ecoli, file_prefix=file_prefix_ecoli)
+    build_fasta_per_sequence(csv_path_staph, fasta_save_path_staph, file_prefix=file_prefix_staph)
     

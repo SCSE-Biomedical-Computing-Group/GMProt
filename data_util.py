@@ -15,7 +15,8 @@ import position_aware_features as PAF
 
 EMB_DIM = 1024
 CONTACT_MAP_FILE = "data/contact_map.csv"
-EMBEDDING_FILE = "data/prott5/prot_t5_xl_uniref50/prott5_residue_level.npz"
+EMBEDDING_FILE_ECOLI = "data/prott5/prott5_ecoli_residue_level.npz"
+EMBEDDING_FILE_S_AUREUS = "data/prott5/prott5_s_aureus_residue_level.npz"
 BLOSUM62_FILE = "data/blosum62_features.csv"
 SINUSOIDAL_ENCODING_FILE = './data/sinusoidal_encoding.csv'
 POSITION_AWARE_FILE = "./data/position_aware_features.csv"
@@ -139,7 +140,10 @@ def load_features(normalize_features=True):
         stats: dict with normalization statistics
     '''
     df = pd.read_csv(CONTACT_MAP_FILE)
-    seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE)
+    seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE_ECOLI)
+    import sys 
+    print(f"Embeeding 1st shape: {np.array(embs[0]).shape}")
+    sys.exit("Debug exit")
 
     blosum_dict = load_blosum62_features(csv_path=BLOSUM62_FILE) #20 features
     physio_dict = PFE.load_physio_features_as_numpy_all() # #32+9 extra n/c bias=41 features
@@ -276,7 +280,8 @@ def save_results_table(results, filename="metrics_results.csv"):
     
 
 if __name__ == "__main__":
-    save_datasets(DATASET_PATH)
+    # save_datasets(DATASET_PATH)
     # datasets = load_datasets()
+    load_features()
 
 

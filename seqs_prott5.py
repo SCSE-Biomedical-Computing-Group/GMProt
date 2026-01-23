@@ -159,8 +159,13 @@ def main(csv_path, save_path):
 # Entry point
 # ------------------------
 if __name__ == "__main__":
-    seq_input_path = "/data/prem001/PGAT-ABPp/code/data/ecoli_normalized.csv"
-    save_path = f"/data/prem001/PGAT-ABPp/code/prott5/{Path(MODEL_NAME).name}/prott5_residue_level.npz"
+    #Ecoli data
+    # seq_input_path = "/data/prem001/PGAT-ABPp/code/data/ecoli_normalized.csv"
+    # save_path = f"/data/prem001/PGAT-ABPp/code/prott5/{Path(MODEL_NAME).name}/prott5_residue_level.npz"
+
+    #Staphylococcus aureus data
+    seq_input_path = "/data/prem001/PGAT-ABPp/code/data/s_aureus_cleaned.csv"
+    save_path = f"/data/prem001/PGAT-ABPp/code/prott5/{Path(MODEL_NAME).name}/prott5_s_aureus_residue_level.npz"
 
     main(seq_input_path, save_path)
 
