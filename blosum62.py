@@ -104,8 +104,15 @@ def load_blosum62_features(csv_path: str) -> pd.DataFrame:
 # 4. Test
 # --------------------------------------------------
 if __name__ == "__main__":
-    input_csv = "data/ecoli_normalized.csv"
-    output_csv = "data/blosum62_features.csv"
+    #Ecoli
+    '''input_csv = "data/ecoli_normalized.csv"
+    output_csv = "data/ecoli_blosum62_features.csv"'''
+
+    #Staph aureus
+    input_csv = "data/s_aureus_cleaned.csv"
+    output_csv = "data/s_aureus_blosum62_features.csv"
+
     # compute_blosum62_features(input_seqs_csv=input_csv, output_csv=output_csv)
+    
     blosum_dict = load_blosum62_features(csv_path=output_csv)
     print(list(blosum_dict.items())[:2])

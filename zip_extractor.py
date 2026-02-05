@@ -36,7 +36,15 @@ def extract_all_zips(zip_folder: str | Path, out_folder: str | Path):
     print(f"Extraction completed. Output stored in: {out_folder}")
 
 if __name__ == "__main__":
-    extract_all_zips(
+    #Ecoli 
+    '''extract_all_zips(
     zip_folder="/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/all_outputs",
     out_folder="/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/raw_pdb"
-)
+    )'''
+
+    #Staph
+    extract_all_zips(
+    zip_folder="./data/alphafold_pdb_stap/result",
+    out_folder="./data/alphafold_pdb_stap/result/raw_pdb")
+    
+    

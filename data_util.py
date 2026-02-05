@@ -14,20 +14,35 @@ import position_aware_features as PAF
 
 
 EMB_DIM = 1024
-CONTACT_MAP_FILE = "data/contact_map.csv"
-EMBEDDING_FILE_ECOLI = "data/prott5/prott5_ecoli_residue_level.npz"
-EMBEDDING_FILE_S_AUREUS = "data/prott5/prott5_s_aureus_residue_level.npz"
-BLOSUM62_FILE = "data/blosum62_features.csv"
-SINUSOIDAL_ENCODING_FILE = './data/sinusoidal_encoding.csv'
-POSITION_AWARE_FILE = "./data/position_aware_features.csv"
+#E.coli files
+CONTACT_MAP_FILE = "data/ecoli_contact_map.csv"
+SINUSOIDAL_ENCODING_FILE = './data/ecoli_sinusoidal_encoding.csv'
+EMBEDDING_FILE = "data/prott5/prott5_ecoli_residue_level.npz"
+PHYSIO_CHEM_FILE = 'data/ecoli_phyiochem.csv'
+BLOSUM62_FILE  = "data/ecoli_blosum62_features.csv"
+DATASET_PATH = "data/five_fold_ecoli/ecoli_datasets.pkl"
+DATSET_SIZE = [3259, 815, 719] #train, val, test | total 4793
+POSITION_AWARE_FILE = "./data/position_aware_features.csv" #Currently not used due to performance issues
 
-DATASET_PATH = "data/five_fold/datasets.pkl"
+
+#sTaphylococcus aureus files
+'''CONTACT_MAP_FILE = "data/s_aureus_contact_map.csv"
+SINUSOIDAL_ENCODING_FILE = './data/s_aureus_sinusoidal_encoding.csv'
+PHYSIO_CHEM_FILE = 'data/s_aureus_phyiochem.csv'
+EMBEDDING_FILE = "data/prott5/prott5_s_aureus_residue_level.npz"
+BLOSUM62_FILE = "data/s_aureus_blosum62_features.csv"
+DATASET_PATH = "data/five_fold_s_aureus/s_aureus_datasets.pkl"
+# DATSET_SIZE = [3067, 657, 657] #train, val, test | total 4381(70:15:15) S_aureus
+DATSET_SIZE = [3505, 438, 438] #train, val, test | total 4381(80:10:10) S_aureus'''
+
+
+
 
 def stratified_train_val_test_splits(
     features,
-    train_size=3259,
-    val_size=815,
-    test_size=719,
+    train_size=DATSET_SIZE[0],
+    val_size=DATSET_SIZE[1],
+    test_size=DATSET_SIZE[2],
     seed=42,
     n_bins=5,
     n_datasets=5,
@@ -140,13 +155,11 @@ def load_features(normalize_features=True):
         stats: dict with normalization statistics
     '''
     df = pd.read_csv(CONTACT_MAP_FILE)
-    seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE_ECOLI)
-    import sys 
+    seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE)
     print(f"Embeeding 1st shape: {np.array(embs[0]).shape}")
-    sys.exit("Debug exit")
 
     blosum_dict = load_blosum62_features(csv_path=BLOSUM62_FILE) #20 features
-    physio_dict = PFE.load_physio_features_as_numpy_all() # #32+9 extra n/c bias=41 features
+    physio_dict = PFE.load_physio_features_as_numpy_all(PHYSIO_CHEM_FILE) #32 features
 
 
     # Load sinusoidal positional encodings | dict[Seq1: np.ndarray (32,), ...]

@@ -650,15 +650,29 @@ def generate_distance_weighted_csv(npz_folder_path, input_csv_path, save_csv_pat
 
 
 if __name__ == "__main__":
-    input_folder="/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/raw_pdb"
-    out_dir= "/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/pdb_features"
-    # extract_pdb_features(input_folder, out_dir) #1. 
-    # explain_npy_feature('pdb_fem_model_3_seed_000_features.npz')
+    #Ecoli
+    '''input_folder="/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/raw_pdb"
+    out_dir= "/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/pdb_features"'''
 
-    generate_contact_map_csv(
+    #Staph
+    input_folder="./data/alphafold_pdb_stap/result/raw_pdb"
+    out_dir= "./data/alphafold_pdb_stap/result/pdb_features"
+    
+    
+    # extract_pdb_features(input_folder, out_dir) #1. 
+    # explain_npy_feature('./data/alphafold_pdb_stap/result/pdb_features/stapc_group_1_5_1_unrelaxed_rank_001_alphafold2_ptm_model_3_seed_000_features.npz')
+
+    #Ecoli
+    '''generate_contact_map_csv(
         npz_folder_path='/data/prem001/PGAT-ABPp/code/data/alphafold_pdb/pdb_features',
         input_csv_path='/data/prem001/PGAT-ABPp/code/data/ecoli_mic_normalized.csv',
         save_csv_path='/data/prem001/PGAT-ABPp/code/data/contact_map.csv'
+    )'''
+    #Staph
+    generate_contact_map_csv(
+        npz_folder_path='./data/alphafold_pdb_stap/result/pdb_features',
+        input_csv_path='./data/s_aureus_cleaned.csv',
+        save_csv_path='./data/s_aureus_contact_map.csv'
     )
 
     '''generate_distance_weighted_csv(

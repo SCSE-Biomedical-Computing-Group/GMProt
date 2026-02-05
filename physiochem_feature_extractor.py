@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
-PHYSIO_CHEM_FILE = 'data/phyiochem.csv'
 
 # Eisenberg hydrophobicity values
 EISENBERG = {
@@ -14,6 +13,29 @@ EISENBERG = {
 }
 
 CHARGE = {"D": -1, "E": -1, "K": 1, "R": 1, "H": 0}
+
+PHYSIO_LABELS = [
+    "Length",
+    "Molecular Weight",
+    "Net Charge",
+    "Charge Density",
+    "Isoelectric Point (pI)",
+    "Instability Index",
+    "Aromaticity",
+    "Aliphatic Index",
+    "Boman Index",
+    "Hydrophobic Ratio",
+
+    # Amino acid composition (fraction)
+    "Ala (A)", "Cys (C)", "Asp (D)", "Glu (E)", "Phe (F)",
+    "Gly (G)", "His (H)", "Ile (I)", "Lys (K)", "Leu (L)",
+    "Met (M)", "Asn (N)", "Pro (P)", "Gln (Q)", "Arg (R)",
+    "Ser (S)", "Thr (T)", "Val (V)", "Trp (W)", "Tyr (Y)",
+
+    # Hydrophobic moment descriptors
+    "Eisenberg Hydrophobic Moment",
+    "Eisenberg Hydrophobicity (Global)"
+]
 
 def extract_amp_features(sequences):
     """
@@ -48,7 +70,7 @@ def extract_amp_features_full(sequences):
     Extracts AMP physicochemical features compatible with current modlamp version.
     
     Features:
-    1. Global descriptors: MW, Charge, pI, Aliphatic Index, Aromaticity, Instability, Boman, Hydrophobic Ratio, Length
+    1. Global descriptors: MW, Charge, ChargeDensity, pI, Aliphatic Index, Aromaticity, Instability, Boman, Hydrophobic Ratio, Length
     2. Amino acid composition: 20 AA frequencies
     3. Eisenberg scale descriptors: hydrophobic moment and global average
     """
@@ -80,11 +102,11 @@ def extract_amp_features_full(sequences):
     return scaled_features, df_final.columns.tolist()
 
 
-def compute_save_physio_features(save_path = 'data/phyiochem_full.csv'):
+def compute_save_physio_features(seq_csv_path=None, save_path = None):
     '''
         Computes Physiochemical Features from ecoli_normalized  Sequence CSV file and Saves it.
     '''
-    df = pd.read_csv('/data/prem001/PGAT-ABPp/code/data/ecoli_mic_normalized.csv') #
+    df = pd.read_csv(seq_csv_path) #
     sequences = df['sequence'].to_list()
 
     # features_scaled, feature_names = extract_amp_features(sequences) #Top 12 features only
@@ -102,19 +124,19 @@ def compute_save_physio_features(save_path = 'data/phyiochem_full.csv'):
 
     print(f"PhysioChem Features saved successfully to: {save_path}.")
 
-def load_physio_features_as_numpy_all():
+def load_physio_features_as_numpy_all(physio_chem_path):
     """
     Returns a dictionary mapping each sequence to a NumPy array of all its physico-chemical features.
 
     Args:
-        PHYSIO_CHEM_FILE (str): Path to the CSV file containing all physico-chemical features.
+        physio_chem_path (str): Path to the CSV file containing all physico-chemical features.
 
     Returns:
         dict: {sequence_str: np.array([all feature values], dtype=np.float32)}
     """
 
     # Load CSV
-    df = pd.read_csv(PHYSIO_CHEM_FILE)
+    df = pd.read_csv(physio_chem_path)
 
     # Remove 'Unnamed: 0' if present and set 'sequence' as index
     df = df.set_index('sequence').drop(columns=['Unnamed: 0'], errors='ignore')
@@ -134,11 +156,11 @@ def load_physio_features_as_numpy_all():
     print(f"Loaded physico-chemical features for {len(features_dict)} sequences.")
     return features_dict
 
-def load_physio_features_as_numpy():
+def load_physio_features_as_numpy(physio_chem_path):
     '''
     Returns Physico dictionary of Sequence as Key, and Numpy array as its feature values.
     '''
-    df = pd.read_csv(PHYSIO_CHEM_FILE)
+    df = pd.read_csv(physio_chem_path)
     #drop 'Unnamed: 0' to get only the numeric features and set index to sequence column
     #index orientation| keys = sequences value: dict:{col1: value1, col2: val2, col3: val3}
     physio_map = df.set_index('sequence').drop(columns=['Unnamed: 0'], errors='ignore').to_dict('index')
@@ -412,11 +434,24 @@ def comp_save_full_physio_with_nc_terminal_bias():
 
     physio.to_csv(full_phyisioc_with_nc, index=False)
 
+def get_physio_feature_labels():
+    dummy_seq = ["ACDEFGHIKLMNPQRSTVWY"]  # any valid peptide
+    desc = GlobalDescriptor(dummy_seq)
+    desc.calculate_all()
+    return desc.descriptor_names
 
 
 if __name__ == "__main__":
-    # compute_save_physio_features()
-    comp_save_full_physio_with_nc_terminal_bias() #Save full physiochem features with nc bias
+    #Ecoli
+    '''input_seq_csv_path='./data/ecoli_mic_normalized.csv', 
+    save_path = 'data/phyiochem_ecoli.csv' '''
+
+    input_seq_csv_path='./data/s_aureus_cleaned.csv' 
+    save_path = './data/s_aureus_phyiochem.csv'
+
+
+    # compute_save_physio_features(input_seq_csv_path, save_path)
+    # comp_save_full_physio_with_nc_terminal_bias() #Save full physiochem features with nc bias
     '''compute_physio_mic_correlation(
         physio_csv=f"data/phyiochem.csv",
         mic_csv=f"data/ecoli_mic_normalized.csv",
@@ -426,10 +461,15 @@ if __name__ == "__main__":
     )'''
 
 
-    # load_physio_features_as_numpy()
+    # load_physio_features_as_numpy('data/s_aureus_phyiochem.csv')
     # integrate_physio_with_mic()
     # corr_dict = compute_physio_mic_correlation()
     # save_dict_to_txt(corr_dict)
+
+    # Use one peptide sequence or the full list
+    labels_physio = get_physio_feature_labels()
+    print(labels_physio)
+
     
 
     

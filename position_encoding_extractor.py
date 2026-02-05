@@ -174,10 +174,15 @@ def extract_onehot_encoding(sequences:list):
     return onehot_global
 
 if __name__ == "__main__":
-    sinusoidal_encoding_path = './data/sinusoidal_encoding.csv'
-
+    #Ecoli
+    # sinusoidal_encoding_path = './data/ecoli_sinusoidal_encoding.csv'
     # pe_global, sequences = extract_position_encoding('./data/ecoli_mic_normalized.csv')
-    # save_position_encoding( pe_global, sequences, sinusoidal_encoding_path)
+
+    #staph
+    sinusoidal_encoding_path = './data/s_aureus_sinusoidal_encoding.csv'
+    pe_global, sequences = extract_position_encoding('./data/s_aureus_cleaned.csv')
+
+    # save_position_encoding(pe_global, sequences, sinusoidal_encoding_path)
     
     # To load later:
     encoding_dict = load_sinusoidal_encoding(sinusoidal_encoding_path)

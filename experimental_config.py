@@ -85,7 +85,7 @@ class ExperimentConfig:
     cnn_input_dim : int = 21
     cnn_emb_output_dim : int = 24
     cnn_filters : int = 64
-    cnn_gating_threshold : float = 0.22
+    cnn_gating_threshold : float = 0.20
 
 
 
