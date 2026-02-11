@@ -1,7 +1,7 @@
 # MoPro: Model Training, Prediction, and Feature Visualization
 
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 
 MoPro is a flexible pipeline for training, predicting, and visualizing feature contributions for peptide/protein modeling tasks. It supports multiple datasets, cross-validation, and interpretable results using feature contribution plots (Integrated Gradients).
 
