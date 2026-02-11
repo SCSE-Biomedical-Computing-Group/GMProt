@@ -74,6 +74,3 @@ Ensure all dependencies and datasets are properly prepared before running.
 If you use this code or pipeline in your research, please cite our paper:
 
 Prem Singh Bist, et al. (2026). **. Journal/Conference Name. DOI: 10.xxxx/xxxx
-
-
-
