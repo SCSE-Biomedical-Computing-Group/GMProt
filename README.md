@@ -23,17 +23,20 @@ MoPro is a flexible pipeline for training, predicting, and visualizing feature c
 ```bash
 git clone https://github.com/yourusername/mopro.git
 cd mopro
-
+```
 
 2. **Install dependencies:**
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt 
+```
 
 
-## Usage
+3. **Usage**
+
+
 ```bash
 python train.py <mode> [--model MODEL_NAME] [--datasets DATASET_INDICES]
-
+```
 | Argument     | Description                                                            |
 | ------------ | ---------------------------------------------------------------------- |
 | `mode`       | Required. Mode to run: `train`, `predict`, or `plot`.                  |
@@ -50,8 +53,9 @@ python train.py predict --datasets 0 1 2 3 4
 
 Plot feature contributions for specific datasets:
 python train.py plot --datasets 0
-
+```
 Plots are saved to ./visualization/IG/fold_<dataset_index>.
+
 
 5. **Directory Structure:**
 ```bash
@@ -62,8 +66,8 @@ Plots are saved to ./visualization/IG/fold_<dataset_index>.
 │   └── IG/                   # Feature contribution plots
 ├── requirements.txt          # Python dependencies
 └── README.md
-
-Notes
+```
+Notes:
 
 The mode argument is mandatory. Use one of train, predict, or plot.
 For visualization, the model must have been trained and saved beforehand.
