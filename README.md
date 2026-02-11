@@ -2,7 +2,6 @@
 
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 
-
 MoPro is a flexible pipeline for training, predicting, and visualizing feature contributions for peptide/protein modeling tasks. It supports multiple datasets, cross-validation, and interpretable results using feature contribution plots (Integrated Gradients).
 
 ---
@@ -19,17 +18,20 @@ MoPro is a flexible pipeline for training, predicting, and visualizing feature c
 
 ## Installation
 
-1. Clone the repository:
+1. **Clone the repository:**
 
 ```bash
 git clone https://github.com/yourusername/mopro.git
-cd abp
+cd mopro
 
-2. Install dependencies:
+
+2. **Install dependencies:**
+```bash
 pip install -r requirements.txt
 
 
-Usage
+3. **Usage:**
+```bash
 python train.py <mode> [--model MODEL_NAME] [--datasets DATASET_INDICES]
 
 | Argument     | Description                                                            |
@@ -38,7 +40,8 @@ python train.py <mode> [--model MODEL_NAME] [--datasets DATASET_INDICES]
 | `--model`    | Optional. Model name. Default: `MoPro`.                                |
 | `--datasets` | Optional. List of dataset indices (supports multiple). Default: `[0]`. |
 
-Examples 
+4. **Examples:** 
+```bash
 Train mode (default dataset [0]):
 python train.py train
 
@@ -50,23 +53,20 @@ python train.py plot --datasets 0
 
 Plots are saved to ./visualization/IG/fold_<dataset_index>.
 
-Directory Structure
-
-.
-├── train.py                       # Main script with argparse
-├── model/                       # Pretrained or saved models
+5. **Directory Structure:**
+```bash
+├── train.py                  # Main script with argparse
+├── model/                    # Pretrained or saved models
 ├── data/                     # Complte datasets
 ├── visualization/
-│   └── IG/                       # Feature contribution plots
-├── requirements.txt               # Python dependencies
+│   └── IG/                   # Feature contribution plots
+├── requirements.txt          # Python dependencies
 └── README.md
 
 Notes
 
 The mode argument is mandatory. Use one of train, predict, or plot.
-
 For visualization, the model must have been trained and saved beforehand.
-
 Ensure all dependencies and datasets are properly prepared before running.
 
 
