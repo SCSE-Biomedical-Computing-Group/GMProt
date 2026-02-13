@@ -14,7 +14,8 @@ The complete dataset is publicly available on **Zenodo**:
 - **DOI:** https://doi.org/10.5281/zenodo.18626920  
 ---
 
-### 📁 Repository Structure
+### 📁 Folder Structure
+```bash
 ├── alphafold_pdb_ecoli/
 ├── alphafold_pdb_stap/
 ├── fasta_ecoli/
@@ -23,6 +24,7 @@ The complete dataset is publicly available on **Zenodo**:
 ├── five_fold_s_aureus/
 ├── protT5/
 └── grampa.csv
+```
 ####  `alphafold_pdb_ecoli`
 Predicted three-dimensional peptide structures (PDB format) targeting *Escherichia coli*, generated using **AlphaFold2**.
 #### `alphafold_pdb_stap`
