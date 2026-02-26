@@ -71,7 +71,7 @@ The original `grampa.csv` dataset is attributed to:
 1. **Clone the repository:**
 
 ```bash
-git clone https://github.com/PremSinghBist/abp.git
+git clone [URL]
 ```
 
 2. **Install dependencies:**
