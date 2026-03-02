@@ -19,10 +19,12 @@ CONTACT_MAP_FILE = "data/ecoli_contact_map.csv"
 SINUSOIDAL_ENCODING_FILE = './data/ecoli_sinusoidal_encoding.csv'
 EMBEDDING_FILE_PROTT5 = "data/prott5/prott5_ecoli_residue_level.npz"
 EMBEDDING_FILE_PROTBERT = "data/prot_bertprot_bert/protbert_ecoli_residue_level.npz"
+EMBEDDING_FILE_ESM2 = "data/esm2esm2_t33_650M_UR50D/esm2_ecoli_residue_level.npz"
 PHYSIO_CHEM_FILE = 'data/ecoli_phyiochem.csv'
 BLOSUM62_FILE  = "data/ecoli_blosum62_features.csv"
 DATASET_PATH_ECOLI_PROTT5 = "data/five_fold_ecoli/ecoli_prott5_based_datasets.pkl"
 DATASET_PATH_ECOLI_PROTBERT = "data/five_fold_ecoli/ecoli_protbert_based_datasets.pkl"
+DATASET_PATH_ECOLI_ESM2 = "data/five_fold_ecoli/ecoli_esm2_based_datasets.pkl"
 DATSET_SIZE = [3259, 815, 719] #train, val, test | total 4793
 POSITION_AWARE_FILE = "./data/position_aware_features.csv" #Currently not used due to performance issues
 
@@ -147,18 +149,28 @@ def normalize(features, mean=None, std=None, eps=1e-8):
     features_norm = (features - mean) / (std + eps)
     return features_norm, mean, std
 
+def load_embeddings(filepath):
+    data = np.load(filepath, allow_pickle=True)
+    original_seqs = data["original_sequences"]
+    processed_seqs = data["processed_sequences"]
+    embeddings = data["embeddings"]
+
+    print(f"Loaded {len(original_seqs)} sequences")
+    print(f"Embeddings array shape: {embeddings.shape}")
+
+    return original_seqs, processed_seqs, embeddings
+
 # ============================================================
 # DATA
 # ============================================================
-def load_features(normalize_features=True, embedding_file=EMBEDDING_FILE_PROTBERT):
+def load_features(normalize_features=True, embedding_file=None):
     '''
     Returns:
         features: List [emb, cm, physio_feature, blosum_feature, sinu_feature, seq, mic]
         stats: dict with normalization statistics
     '''
     df = pd.read_csv(CONTACT_MAP_FILE)
-    # seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE_PROTT5) # ProtT5 embeddings
-    seqs, _, embs = prott5.load_embeddings(embedding_file) #ProtBert embeddings
+    seqs, _, embs = load_embeddings(embedding_file) #ProtT5/ProtBert/ESM2 embeddings
     print(f"Embeeding 1st shape: {np.array(embs[0]).shape}")
 
     blosum_dict = load_blosum62_features(csv_path=BLOSUM62_FILE) #20 features
@@ -238,7 +250,7 @@ def load_features(normalize_features=True, embedding_file=EMBEDDING_FILE_PROTBER
     return features
 
 
-def save_datasets(save_path, embedding_file=None):
+def save_datasets(save_path=None, embedding_file=None):
     """
     datasets: List of (train_set, val_set, test_set)
     filepath: str, e.g. 'datasets.npz'
@@ -297,8 +309,9 @@ def save_results_table(results, filename="metrics_results.csv"):
 
 if __name__ == "__main__":
     # save_datasets(DATASET_PATH_ECOLI_PROTT5, embedding_file=EMBEDDING_FILE_PROTT5)
-    save_datasets(DATASET_PATH_ECOLI_PROTBERT, embedding_file=EMBEDDING_FILE_PROTBERT)
-    datasets = load_datasets(dataset_path=DATASET_PATH_ECOLI_PROTBERT)
-    load_features(embedding_file=EMBEDDING_FILE_PROTBERT)
+    # save_datasets(DATASET_PATH_ECOLI_PROTBERT, embedding_file=EMBEDDING_FILE_PROTBERT)
+    save_datasets(save_path=DATASET_PATH_ECOLI_ESM2, embedding_file=EMBEDDING_FILE_ESM2)
+    datasets = load_datasets(dataset_path=DATASET_PATH_ECOLI_ESM2)
+    load_features(embedding_file=EMBEDDING_FILE_ESM2)
 
 

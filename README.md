@@ -96,6 +96,7 @@ python train.py <mode> [--model MODEL_NAME] [--datasets DATASET_INDICES]
 ```bash
 Train mode (default dataset [0]):
 python train.py train
+python train.py train --model Mymodel --datasets 0 1 2 3 4 
 
 Predict mode 
 python train.py predict --datasets 0 1 2 3 4

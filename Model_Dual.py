@@ -319,7 +319,8 @@ class CrossAttentionFusion(tf.keras.layers.Layer):
         """
 
         # Convert each modality into a token
-        tokens = tf.stack([seq_feat, gnn_feat, physio_feat], axis=1)   # [B, 3, D]
+        # tokens = tf.stack([seq_feat, gnn_feat, physio_feat], axis=1)   # [B, 3, D]
+        tokens = tf.stack([seq_feat,  physio_feat], axis=1) #new 
 
         # Cross-attention across modalities
         attn = self.mha(

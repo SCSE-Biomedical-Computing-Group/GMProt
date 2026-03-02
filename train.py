@@ -39,7 +39,9 @@ for g in gpus:
 
 # --------------------------- Hyperparameters ---------------------------
 cfg = ExperimentConfig()
-EMB_DIM = 1024
+EMB_DIM = 1024 #For ProtT5 and ProtBert Model 
+# EMB_DIM = 1280 #For ESM2 Model
+
 PHYSIO_DIM = cfg.physio_feature_dim + cfg.blosum_feature_dim + cfg.sinusoidal_feature_dim  #32+20+32+=84 #using only physio physio (32+ ncbias:9(not used)) + Blosum features(20) + Sinusoidal PE(32)
 
 from physiochem_feature_extractor import PHYSIO_LABELS
@@ -301,8 +303,8 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         return self.out(fused)'''
 
         #Attention weighted fusion 
-        fused = self.get_attention_weighted_feature_fused(training=training, seq_feat=seq_feat, gnn_feat=None, physio_feat=physio_feat, seq_cnn_feat=seq_cnn_feat) 
-        return self.out(fused)
+        '''fused = self.get_attention_weighted_feature_fused(training=training, seq_feat=seq_feat, gnn_feat=None, physio_feat=physio_feat, seq_cnn_feat=seq_cnn_feat) 
+        return self.out(fused)'''
 
         # Output
         return self.out(seq_feat + physio_feat)
@@ -454,8 +456,8 @@ def load_model_and_evaluate_test(
 
 
 # --------------------------- Execute ---------------------------
-def execute(model_name, datasets_index=[0], save_file='ecoli_protbert_metrics_results.csv'):
-    datasets = data_util.load_datasets(datasets_index=datasets_index, dataset_path=data_util.DATASET_PATH_ECOLI_PROTBERT)
+def execute(model_name, datasets_index=[0], save_file='ecoli_esm2_metrics_results.csv', dataset_path=data_util.DATASET_PATH_ECOLI_ESM2):
+    datasets = data_util.load_datasets(datasets_index=datasets_index, dataset_path=dataset_path)
     all_metrics = []
     for i, (train_f, val_f, test_f) in enumerate(datasets):
         _, metrics = train_model(train_f, val_f, test_f, model_name, i)
