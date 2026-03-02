@@ -32,7 +32,7 @@ from Model_Dual import GraphAttentionNetwork,  TransformerEncoderReadout, CrossA
 from sequence_cnn import SequenceCNN
 from validation_pearson import ValPearsonCallback
 # --------------------------- GPU Setup ---------------------------
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 gpus = tf.config.list_physical_devices("GPU")
 for g in gpus:
     tf.config.experimental.set_memory_growth(g, True)
@@ -192,7 +192,7 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         self.physio_bottleneck = layers.Dense(cfg.physio_bottleneck_dim, activation=cfg.physio_bottleneck_A) 
 
         #Cross attention fusion layer
-        # self.cross_attn_fusion = CrossAttentionFusion(dim=cfg.seq_bottleneck_dim, num_heads=4, dropout=0.1)
+        self.cross_attn_fusion = CrossAttentionFusion(dim=cfg.seq_bottleneck_dim, num_heads=4, dropout=0.1)
 
         #seq cnn branch 
         self.seq_cnn = SequenceCNN()
@@ -296,13 +296,21 @@ class ImprovedDualBranchGNN_AttentionFusion(keras.Model):
         # CNN Modulation
         seq_feat = seq_feat * (1 + cfg.cnn_gating_threshold * tf.tanh(seq_cnn_feat)) #gating trick(used in alphafold) for cnn+protT5
 
-       
+        # Fusion based output testing(Ablation Test Cross Attention Fusion)
+        '''fused = self.get_cross_attention_weighted_feature_fused(training=training, seq_feat=seq_feat, gnn_feat=None, physio_feat=physio_feat) #gnn feature removed (Perf. dropped)
+        return self.out(fused)'''
+
+        #Attention weighted fusion 
+        fused = self.get_attention_weighted_feature_fused(training=training, seq_feat=seq_feat, gnn_feat=None, physio_feat=physio_feat, seq_cnn_feat=seq_cnn_feat) 
+        return self.out(fused)
+
         # Output
         return self.out(seq_feat + physio_feat)
 
     def get_attention_weighted_feature_fused(self, training, seq_feat, gnn_feat, physio_feat, seq_cnn_feat):
         # concat_feats = tf.stack([seq_feat, gnn_feat, physio_feat, seq_cnn_feat], axis=1) #cnn based
-        concat_feats = tf.stack([seq_feat, gnn_feat, physio_feat], axis=1)
+        # concat_feats = tf.stack([seq_feat, gnn_feat, physio_feat], axis=1)
+        concat_feats = tf.stack([seq_feat,  physio_feat], axis=1)
         # concat_feats = tf.stack([seq_feat, physio_feat], axis=1) #gnn feautre removed (Perf. dropped)
         attn_scores = tf.nn.softmax(self.attn_dense(concat_feats), axis=1)
         fused = tf.reduce_sum(concat_feats * attn_scores, axis=1) #Weighted sum based on attention scores
@@ -446,15 +454,15 @@ def load_model_and_evaluate_test(
 
 
 # --------------------------- Execute ---------------------------
-def execute(model_name, datasets_index=[0]):
-    datasets = data_util.load_datasets(datasets_index=datasets_index)
+def execute(model_name, datasets_index=[0], save_file='ecoli_protbert_metrics_results.csv'):
+    datasets = data_util.load_datasets(datasets_index=datasets_index, dataset_path=data_util.DATASET_PATH_ECOLI_PROTBERT)
     all_metrics = []
     for i, (train_f, val_f, test_f) in enumerate(datasets):
         _, metrics = train_model(train_f, val_f, test_f, model_name, i)
         all_metrics.append(metrics)
     
     model_path, config_path = get_model_path(model_name)
-    data_util.save_results_table(all_metrics, filename=model_path / "metrics_results.csv")
+    data_util.save_results_table(all_metrics, filename=model_path / save_file)
 
     return all_metrics
 

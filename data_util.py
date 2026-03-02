@@ -17,10 +17,12 @@ EMB_DIM = 1024
 #E.coli files
 CONTACT_MAP_FILE = "data/ecoli_contact_map.csv"
 SINUSOIDAL_ENCODING_FILE = './data/ecoli_sinusoidal_encoding.csv'
-EMBEDDING_FILE = "data/prott5/prott5_ecoli_residue_level.npz"
+EMBEDDING_FILE_PROTT5 = "data/prott5/prott5_ecoli_residue_level.npz"
+EMBEDDING_FILE_PROTBERT = "data/prot_bertprot_bert/protbert_ecoli_residue_level.npz"
 PHYSIO_CHEM_FILE = 'data/ecoli_phyiochem.csv'
 BLOSUM62_FILE  = "data/ecoli_blosum62_features.csv"
-DATASET_PATH = "data/five_fold_ecoli/ecoli_datasets.pkl"
+DATASET_PATH_ECOLI_PROTT5 = "data/five_fold_ecoli/ecoli_prott5_based_datasets.pkl"
+DATASET_PATH_ECOLI_PROTBERT = "data/five_fold_ecoli/ecoli_protbert_based_datasets.pkl"
 DATSET_SIZE = [3259, 815, 719] #train, val, test | total 4793
 POSITION_AWARE_FILE = "./data/position_aware_features.csv" #Currently not used due to performance issues
 
@@ -148,14 +150,15 @@ def normalize(features, mean=None, std=None, eps=1e-8):
 # ============================================================
 # DATA
 # ============================================================
-def load_features(normalize_features=True):
+def load_features(normalize_features=True, embedding_file=EMBEDDING_FILE_PROTBERT):
     '''
     Returns:
         features: List [emb, cm, physio_feature, blosum_feature, sinu_feature, seq, mic]
         stats: dict with normalization statistics
     '''
     df = pd.read_csv(CONTACT_MAP_FILE)
-    seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE)
+    # seqs, _, embs = prott5.load_embeddings(EMBEDDING_FILE_PROTT5) # ProtT5 embeddings
+    seqs, _, embs = prott5.load_embeddings(embedding_file) #ProtBert embeddings
     print(f"Embeeding 1st shape: {np.array(embs[0]).shape}")
 
     blosum_dict = load_blosum62_features(csv_path=BLOSUM62_FILE) #20 features
@@ -235,12 +238,12 @@ def load_features(normalize_features=True):
     return features
 
 
-def save_datasets(save_path):
+def save_datasets(save_path, embedding_file=None):
     """
     datasets: List of (train_set, val_set, test_set)
     filepath: str, e.g. 'datasets.npz'
     """
-    features = load_features()
+    features = load_features(embedding_file=embedding_file)
     datasets = stratified_train_val_test_splits(
         features,
         seed=42,
@@ -253,13 +256,13 @@ def save_datasets(save_path):
     
     print(f"Datasets saved to {save_path}.")
 
-def load_datasets(datasets_index=[0, 1, 2, 3, 4]):
+def load_datasets(datasets_index=[0, 1, 2, 3, 4], dataset_path=DATASET_PATH_ECOLI_PROTBERT):
     """
     datasets_index: Which Dataset to load 
     0: First dataset 1: Second dataset and so on.
     Returns: List [(train_set, val_set, test_set), (...)]
     """
-    with open(DATASET_PATH, "rb") as f:
+    with open(dataset_path, "rb") as f:
         datasets = pickle.load(f)
 
 
@@ -293,8 +296,9 @@ def save_results_table(results, filename="metrics_results.csv"):
     
 
 if __name__ == "__main__":
-    # save_datasets(DATASET_PATH)
-    # datasets = load_datasets()
-    load_features()
+    # save_datasets(DATASET_PATH_ECOLI_PROTT5, embedding_file=EMBEDDING_FILE_PROTT5)
+    save_datasets(DATASET_PATH_ECOLI_PROTBERT, embedding_file=EMBEDDING_FILE_PROTBERT)
+    datasets = load_datasets(dataset_path=DATASET_PATH_ECOLI_PROTBERT)
+    load_features(embedding_file=EMBEDDING_FILE_PROTBERT)
 
 
