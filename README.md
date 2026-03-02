@@ -1,8 +1,8 @@
-# MoPro: Model Training, Prediction, and Feature Visualization
+# GMProt: Gated Modulation Protein Language Model for Prediction of Antimicrobial Peptide Activity
 
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 
-ModProt is a flexible pipeline for training, prediction, and visualization of feature contributions in antimicrobial peptide activity modeling, including the estimation of Minimum Inhibitory Concentration (MIC). This framework accompanies and supports our work, “Gated Protein Language Modeling for Accurate Prediction of Antimicrobial Peptide Activity.”
+GMProt is a flexible pipeline for training, prediction, and visualization of feature contributions in antimicrobial peptide activity modeling, including the estimation of Minimum Inhibitory Concentration (MIC). This framework accompanies and supports our work, “Gated Protein Language Modeling for Accurate Prediction of Antimicrobial Peptide Activity.”
 
 For a comprehensive description of the approach, please refer to the paper: [link here]
 
