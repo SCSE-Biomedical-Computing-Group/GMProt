@@ -89,7 +89,7 @@ python train.py <mode> [--model MODEL_NAME] [--datasets DATASET_INDICES]
 | Argument     | Description                                                            |
 | ------------ | ---------------------------------------------------------------------- |
 | `mode`       | Required. Mode to run: `train`, `predict`, or `plot`.                  |
-| `--model`    | Optional. Model name. Default: `MoPro`.                                |
+| `--model`    | Optional. Model name. Default: `GMProt`.                                |
 | `--datasets` | Optional. List of dataset indices (supports multiple). Default: `[0]`. |
 
 4. **Examples:** 
